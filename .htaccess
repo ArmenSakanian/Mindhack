@@ -1,0 +1,10 @@
+RewriteEngine On
+RewriteBase /
+
+# Пропускаем реальные файлы/папки
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Всё остальное — на index.html (SPA)
+RewriteRule ^ index.html [L]
