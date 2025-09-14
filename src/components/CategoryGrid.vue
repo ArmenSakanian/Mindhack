@@ -150,7 +150,7 @@ onMounted(loadCategories);
   margin: 0 0 10px;
   font-weight: 900;
   font-size: clamp(28px, 4vw, 56px);
-  color: #ff9900;
+  color: var(--accent-color);
   line-height: 1.1;
 }
 .head p {
@@ -265,7 +265,7 @@ onMounted(loadCategories);
   margin: 0;
   font-size: clamp(20px, 2.4vw, 30px);
   font-weight: 900;
-  color: #ff9900;
+  color: var(--accent-color);
   line-height: 1.15;
 }
 .tagline {
@@ -290,7 +290,7 @@ onMounted(loadCategories);
   line-height: 1.3;
 }
 .perks i {
-  color: #ff9900;
+  color: var(--accent-color);
 }
 @media (max-width: 640px) {
   .perks {
@@ -305,7 +305,7 @@ onMounted(loadCategories);
 .price {
   font-weight: 900;
   font-size: 20px;
-  color: #ff9900;
+  color: var(--accent-color);
 }
 
 /* ====== КНОПКА ====== */
@@ -323,7 +323,7 @@ onMounted(loadCategories);
   border: none;
   font-weight: 800;
   font-size: 16px;
-  background: #ff9900;
+  background: var(--accent-color);
   color: #1b1230;
   transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
   text-decoration: none;

@@ -99,7 +99,7 @@
               v-model.trim="featureInput"
               type="text"
               :placeholder="featPlaceholder"
-              :maxlength="50"
+              :maxlength="300"
               @keydown.enter.prevent="addFeature"
               :disabled="form.features.length >= FEAT_MAX"
             />

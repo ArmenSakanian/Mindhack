@@ -149,7 +149,7 @@ export default {
   font-size: 56px;
   line-height: 1.2;
   margin: 0 0 20px;
-  color: #ff9900;
+  color: var(--accent-color);
 }
 .hero p {
   color: #cfc7de;
@@ -169,7 +169,7 @@ export default {
   font-weight: 600;
   font-size: 16px;
   cursor: pointer;
-  color: #ff9900;
+  color: var(--accent-color);
   background: transparent;
   transition: transform 0.2s ease;
 }
@@ -200,7 +200,7 @@ export default {
 }
 .trust-items i {
   font-size: 36px;
-  color: #ffb455;
+  color: var(--accent-color);
   filter: drop-shadow(0 2px 10px rgba(255, 153, 0, 0.28));
 }
 .trust-title {
@@ -220,7 +220,7 @@ export default {
 .features h3 {
   text-align: center;
   margin: 0 0 20px;
-  color: #ff9900;
+  color: var(--accent-color);
   font-size: 28px;
 }
 .features-grid {
@@ -239,7 +239,7 @@ export default {
 }
 .feat i {
   font-size: 28px;
-  color: #ff9900;
+  color: var(--accent-color);
   margin-top: 2px;
 }
 .feat-title {

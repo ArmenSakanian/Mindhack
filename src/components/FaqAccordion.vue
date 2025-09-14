@@ -139,7 +139,7 @@ const toggle = (i) => {
   font-size: 28px;
   font-weight: 700;
   margin: 0 0 8px;
-  color: #ff9900;
+  color: var(--accent-color);
   letter-spacing: 0.5px;
 }
 
@@ -166,7 +166,7 @@ const toggle = (i) => {
 }
 
 .faq__item.open {
-  border-color: #ff9900;
+  border-color: var(--accent-color);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
 }
 
@@ -197,7 +197,7 @@ const toggle = (i) => {
 
 .faq__item.open .faq__icon {
   transform: rotate(45deg);
-  color: #ff9900;
+  color: var(--accent-color);
 }
 
 .faq__panel {

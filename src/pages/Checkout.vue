@@ -1,13 +1,12 @@
 <template>
   <section class="checkout">
-    <!-- Фон -->
     <div class="bg"></div>
 
     <div class="wrap">
       <header class="head">
         <h1 class="title">Оформление заказа</h1>
         <p class="subtitle">
-          Укажите актуальный e-mail — на него отправим ссылку для скачивания.
+          Поля, отмеченные <span class="req">*</span>, обязательны для заполнения.
         </p>
       </header>
 
@@ -17,10 +16,10 @@
       </div>
 
       <div v-else class="grid">
-        <!-- Чек -->
+        <!-- Список продуктов -->
         <div class="card receipt">
           <div class="receipt-head">
-            <h2 class="h2">Чек</h2>
+            <h2 class="h2">Ваш заказ</h2>
             <span class="tag">Цифровой товар</span>
           </div>
 
@@ -54,7 +53,7 @@
 
           <form class="form" @submit.prevent="pay">
             <label class="field">
-              <span>Имя</span>
+              <span>Имя <span class="req">*</span></span>
               <input
                 v-model.trim="form.name"
                 type="text"
@@ -64,7 +63,7 @@
             </label>
 
             <label class="field">
-              <span>E-mail</span>
+              <span>E-mail <span class="req">*</span></span>
               <input
                 v-model.trim="form.email"
                 type="email"
@@ -79,23 +78,30 @@
             </label>
 
             <label class="field">
-  <span>Телефон</span>
-  <input
-    v-model="form.phone"
-    type="tel"
-    placeholder="+7 (___) ___-__-__"
-    @input="formatPhone"
-  />
-</label>
+              <span>Телефон</span>
+              <input
+                v-model="form.phone"
+                type="tel"
+                placeholder="+7 (___) ___-__-__"
+                @input="formatPhone"
+              />
+            </label>
 
-
+            <!-- Галочка оферты (обязательная) -->
             <label class="check">
-              <input type="checkbox" v-model="agree" />
+              <input type="checkbox" v-model="agreeOffer" />
               <span>
-                Я принимаю
-                <a href="/offer" target="_blank">условия оферты</a>
-                и
-                <a href="/privacy" target="_blank">политику конфиденциальности</a>
+                Я принимаю <a href="/PublicOffer" target="_blank">условия оферты</a>
+                <span class="req">*</span>
+              </span>
+            </label>
+
+            <!-- Галочка политики (необязательная) -->
+            <label class="check">
+              <input type="checkbox" v-model="agreePrivacy" />
+              <span>
+                Ознакомлен с
+                <a href="/PrivacyPolicy" target="_blank">политикой конфиденциальности</a>
               </span>
             </label>
 
@@ -110,7 +116,7 @@
       </div>
     </div>
 
-    <!-- Модальное окно (оставил как переход к оплате, без текста про «заглушку») -->
+    <!-- Модалка -->
     <div v-if="showMock" class="modal">
       <div class="modal-card">
         <h3>Переход к оплате</h3>
@@ -132,11 +138,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
-/** Если в корзине другой ключ — замени здесь */
 const LS_KEY = 'mh_cart_v1'
-
 const router = useRouter()
-const items = ref([]) // [{id,title,price,image?,qty}]
+const items = ref([])
 
 function loadCart() {
   try {
@@ -159,78 +163,60 @@ function fmt(n) {
 
 function formatPhone(e) {
   let digits = e.target.value.replace(/\D/g, '')
-
-  // убираем возможный первый 8 или 7
   if (digits.startsWith('7') || digits.startsWith('8')) {
     digits = digits.substring(1)
   }
-
-  // ограничим только 10 цифрами
   digits = digits.substring(0, 10)
 
   let formatted = '+7'
-  if (digits.length > 0) {
-    formatted += ' (' + digits.substring(0, 3)
-  }
-  if (digits.length >= 3) {
-    formatted += ') ' + digits.substring(3, 6)
-  }
-  if (digits.length >= 6) {
-    formatted += '-' + digits.substring(6, 8)
-  }
-  if (digits.length >= 8) {
-    formatted += '-' + digits.substring(8, 10)
-  }
+  if (digits.length > 0) formatted += ' (' + digits.substring(0, 3)
+  if (digits.length >= 3) formatted += ') ' + digits.substring(3, 6)
+  if (digits.length >= 6) formatted += '-' + digits.substring(6, 8)
+  if (digits.length >= 8) formatted += '-' + digits.substring(8, 10)
 
   e.target.value = formatted
   form.value.phone = formatted
 }
 
-
-/* ------- Форма (без OTP) ------- */
-const form = ref({
-  name: '',
-  email: '',
-  phone: '',
-})
+const form = ref({ name: '', email: '', phone: '' })
 const emailTouched = ref(false)
 const validEmail = computed(() =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.value.email)
 )
 
-const agree = ref(false)
+const agreeOffer = ref(false)   // обязательно
+const agreePrivacy = ref(false) // опционально
+
 const showMock = ref(false)
 
-/** К оплате допускаем: валидная почта + согласие + товары есть + имя заполнено */
 const canPay = computed(() =>
   validEmail.value &&
-  agree.value &&
   items.value.length > 0 &&
-  form.value.name.trim().length > 1
+  form.value.name.trim().length > 1 &&
+  agreeOffer.value
 )
 
 function pay() {
   if (!canPay.value) return
-  // Здесь позже подключим реальный платёжный провайдер
   showMock.value = true
 }
-
 function finishMock() {
   showMock.value = false
-  // Очистка корзины и переход на страницу успеха
   localStorage.removeItem(LS_KEY)
   router.push({ name: 'paymentSuccess', query: { amount: grandTotal.value } })
 }
 </script>
 
 <style scoped>
+.req { color: var(--accent-color); font-weight: 600; }
+
 /* ---------- Базовая область ---------- */
 .checkout {
   position: relative;
   min-height: 100vh;
+  padding-top: 110px;
   color: #ececf3;
   overflow: clip;
-  padding: 40px 0;
 }
 
 /* ---------- Фон ---------- */
@@ -238,23 +224,7 @@ function finishMock() {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(
-      1200px 600px at 10% -10%,
-      rgba(255, 153, 0, 0.08),
-      transparent 60%
-    ),
-    radial-gradient(
-      800px 400px at 90% 10%,
-      rgba(135, 77, 255, 0.1),
-      transparent 55%
-    ),
-    linear-gradient(
-      160deg,
-      #0f0b1a,
-      #1b1230 45%,
-      #2a1545 70%,
-      #35185a
-    );
+  radial-gradient(1200px 600px at 10% -10%,rgba(255,153,0,.08),transparent 60%),radial-gradient(800px 400px at 90% 10%,rgba(135,77,255,.1),transparent 55%),linear-gradient(1deg,#0f0b1a,#121b30 45%,#153345 70%,#183e5a);
   z-index: 0;
 }
 
@@ -315,7 +285,7 @@ function finishMock() {
 }
 .sticky { position: sticky; top: 24px; }
 
-/* ---------- Чек — усиленный стиль ---------- */
+/* ---------- Список продуктов ---------- */
 .receipt .receipt-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 8px;
@@ -350,12 +320,8 @@ function finishMock() {
 .qty { font-size: 12px; }
 .muted { color: #9aa0a6; }
 .right { text-align: right; }
-.unit {
-  font-size: 12px; color: #9aa0a6;
-}
-.total {
-  font-weight: 800; font-size: 16px; letter-spacing: .2px;
-}
+.unit { font-size: 12px; color: #9aa0a6; }
+.total { font-weight: 800; font-size: 16px; letter-spacing: .2px; }
 
 /* ---------- Итог ---------- */
 .sum {
@@ -388,23 +354,23 @@ function finishMock() {
 }
 .field input:focus {
   outline: none;
-  border-color: rgba(135, 77, 255, 0.6);
+  border-color: rgba(255, 190, 77, 0.6);
   box-shadow: 0 0 0 4px rgba(135, 77, 255, 0.15);
 }
 .hint { font-size: 12px; color: #a9a9b3; }
 .big-hint { font-size: 13.5px; color: #e2e2ea; }
 
-/* ---------- Чекбокс ---------- */
+/* ---------- Чекбоксы ---------- */
 .check {
-  display: flex; align-items: center; gap: 10px; margin: 10px 0 16px;
+  display: flex; align-items: center; gap: 10px; margin: 10px 0 8px;
 }
 .check input[type="checkbox"] {
   width: 18px; height: 18px;
-  accent-color: #ff9900; /* #f90 */
+  accent-color: var(--accent-color);
 }
 .check a {
-  color: #ff9900;
-  text-decoration: none; /* убрали пунктир */
+  color: var(--accent-color);
+  text-decoration: none;
 }
 .check a:hover { text-decoration: underline; }
 
@@ -418,7 +384,7 @@ function finishMock() {
 }
 .btn:hover { background: rgba(255, 255, 255, 0.1); }
 .btn.primary {
-  background: linear-gradient(135deg, #874dff, #ff9900);
+  background: linear-gradient(135deg, #874dff, var(--accent-color));
   border: none; color: #fff; font-weight: 600;
   box-shadow: 0 8px 24px rgba(135, 77, 255, 0.4);
 }

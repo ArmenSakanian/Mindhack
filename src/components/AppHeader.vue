@@ -325,7 +325,7 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 .link.active {
-  color: #ff9900;
+  color: var(--accent-color);
   background: rgba(255, 153, 0, 0.12);
   opacity: 1;
 }
@@ -345,13 +345,13 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 .cart:hover {
-  color: #ff9900;
+  color: var(--accent-color);
 }
 .badge {
   position: absolute;
   top: -6px;
   right: -10px;
-  background: #ff9900;
+  background: var(--accent-color);
   color: #1b1230;
   font-size: 13px;
   font-weight: 800;
@@ -426,7 +426,7 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 .mlink.active {
-  color: #ff9900;
+  color: var(--accent-color);
   background: rgba(255, 153, 0, 0.12);
 }
 

@@ -101,7 +101,7 @@
               v-model.trim="keywordInput"
               type="text"
               :placeholder="kwPlaceholder"
-              :maxlength="30"
+              :maxlength="100"
               @keydown.enter.prevent="addKeyword"
               :disabled="form.keywords.length >= KW_MAX"
             />

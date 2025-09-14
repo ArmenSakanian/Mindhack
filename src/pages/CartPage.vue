@@ -220,7 +220,7 @@ const items = computed(() => state.items);
 .head h2 {
   margin: 0 0 8px;
   font-size: 42px;
-color: #ff9900;
+color: var(--accent-color);
 }
 .sub {
   color: #cfc7de;
@@ -243,7 +243,7 @@ a:visited {
   font-weight: 800;
   font-size: 16px;
   line-height: 1;
-  background: #ff9900;
+  background: var(--accent-color);
   color: #1b1230;
   text-decoration: none; /* БЕЗ подчёркивания */
   box-shadow: 0 8px 20px rgba(255, 153, 0, 0.25);
@@ -269,7 +269,7 @@ a:visited {
   border: none;
   cursor: pointer;
   font-weight: 700;
-  color: #ff9900;
+  color: var(--accent-color);
   text-decoration: none; /* убрали подчёркивание */
 }
 .btn-link:hover {
@@ -291,7 +291,7 @@ a:visited {
   width: 120px;
   height: 120px;
   margin: 0 auto 16px;
-  color: #ffd28a;
+  color: var(--accent-color);
   opacity: 0.9;
 }
 .empty-icon svg {
@@ -356,7 +356,7 @@ a:visited {
 .price,
 .line {
   font-weight: 800;
-  color: #ff9900;
+  color: var(--accent-color);
 }
 
 .qty {
@@ -413,7 +413,7 @@ a:visited {
 }
 .summary .row strong {
   font-size: 24px;
-  color: #ffd28a;
+  color: var(--accent-color);
 }
 
 /* Мобильная адаптация */

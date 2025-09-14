@@ -6,8 +6,10 @@ import AdminDashboard from '@/pages/AdminDashboard.vue'
 import AdminCategories from '@/components/AdminCategories.vue'
 import AdminProducts from '@/components/AdminProducts.vue'
 import CategoryProducts from '@/pages/CategoryProducts.vue'
-import OfferTerms from '@/pages/OfferTerms.vue'
 import FaqAccordion from '@/components/FaqAccordion.vue'
+import PrivacyPolicy from '@/pages/PrivacyPolicy.vue'
+import PublicOffer from '@/pages/PublicOffer.vue'
+import MarketingConsent from '@/pages/MarketingConsent.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -21,8 +23,11 @@ const router = createRouter({
 
     { path: '/category/:id(\\d+)', name: 'category', component: CategoryProducts, props: true },
     { path: '/category', name: 'categoryQuery', component: CategoryProducts },
-    { path: '/OfferTerms', name: 'OfferTerms', component: OfferTerms},
     { path: '/FaqAccordion', name: 'FaqAccordion', component: FaqAccordion},
+    { path: '/PrivacyPolicy', name: 'PrivacyPolicy', component: PrivacyPolicy},
+    { path: '/PublicOffer', name: 'PublicOffer', component: PublicOffer},
+    { path: '/MarketingConsent', name: 'MarketingConsent', component: MarketingConsent},
+
 
 
     // Корзина

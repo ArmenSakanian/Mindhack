@@ -41,7 +41,7 @@
 
               <div class="meta">
                 <div class="price" v-if="p.price != null">
-                  от {{ formatPrice(p.price) }}
+                {{ formatPrice(p.price) }}
                 </div>
 
                 <!-- Кнопки действий -->
@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
 .head h2 {
   margin: 0 0 10px;
   font-size: 48px;
-  color: #ff9900;
+  color: var(--accent-color);
 }
 .sub {
   color: #cfc7de;
@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
 
 /* Левая половина (контент) */
 .content {
-  padding: 26px 26px 24px 26px;
+  padding: 26px 40px 24px 24px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -398,7 +398,7 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 30px;
   font-weight: 900;
-  color: #ff9900;
+  color: var(--accent-color);
 }
 .tagline {
   margin: 2px 0 6px;
@@ -408,9 +408,9 @@ onBeforeUnmount(() => {
 }
 
 .features {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px 16px;
   list-style: none;
   padding: 0;
   margin: 4px 0 0;
@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
   font-size: 15px;
 }
 .features i {
-  color: #ff9900;
+  color: var(--accent-color);
 }
 
 .meta {
@@ -436,7 +436,7 @@ onBeforeUnmount(() => {
 .price {
   font-weight: 900;
   font-size: 22px;
-  color: #ff9900;
+  color: var(--accent-color);
 }
 
 /* Кнопки действий */
@@ -455,7 +455,7 @@ onBeforeUnmount(() => {
   border: none;
   font-weight: 800;
   font-size: 16px;
-  background: #ff9900;
+  background: var(--accent-color);
   color: #1b1230;
   transition: transform 0.18s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   font-weight: 800;
   font-size: 16px;
-  border: 2px solid #ff9900;
+  border: 2px solid var(--accent-color);
   background: transparent;
   color: #ffcc80;
   transition: transform 0.18s ease, background 0.2s ease, border-color 0.2s ease;

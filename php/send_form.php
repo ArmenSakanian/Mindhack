@@ -3,6 +3,8 @@
 // Требуется папка PHPMailer с файлами: PHPMailer/src/{PHPMailer.php, SMTP.php, Exception.php}
 // SMTP для REG.RU: mail.hosting.reg.ru (SSL 465) или TLS 587
 
+require_once __DIR__ . '/db.php'; // в db.php должен быть $pdo = new PDO(...)
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -58,7 +60,8 @@ $filters = [
   'phone'   => FILTER_SANITIZE_SPECIAL_CHARS,
   'subject' => FILTER_SANITIZE_SPECIAL_CHARS,
   'message' => FILTER_SANITIZE_SPECIAL_CHARS,
-  'consent' => FILTER_DEFAULT,
+  'policy'  => FILTER_DEFAULT,   // ✅ исправлено
+  'marketing' => FILTER_DEFAULT,
 ];
 $in = filter_input_array(INPUT_POST, $filters) ?: [];
 
@@ -67,8 +70,8 @@ $email   = trim($in['email'] ?? '');
 $phone   = trim($in['phone'] ?? '');
 $subject = trim($in['subject'] ?? 'Сообщение с сайта');
 $message = trim($in['message'] ?? '');
-$consent = isset($in['consent']) && in_array($in['consent'], ['true','on','1','yes','да','Да'], true);
-
+$policy = isset($in['policy']) && in_array($in['policy'], ['true','on','1','yes','да','Да'], true);
+$marketing = isset($in['marketing']) && in_array($in['marketing'], ['true','on','1','yes','да','Да'], true);
 if (mb_strlen($name) < 2) {
   json_exit(false, 'Укажите имя (минимум 2 символа).');
 }
@@ -84,7 +87,7 @@ if (mb_strlen($subject) < 3) {
 if (mb_strlen($message) < 10) {
   json_exit(false, 'Сообщение слишком короткое (мин. 10 символов).');
 }
-if (!$consent) {
+if (!$policy) {
   json_exit(false, 'Необходимо согласие с политикой конфиденциальности.');
 }
 
@@ -380,6 +383,27 @@ try {
   } catch (Exception $e2) {
     // лог при желании: $e2->getMessage()
   }
+
+// 3) запись в БД, если стоит галочка маркетинга
+if ($marketing) {
+  try {
+    $stmt = db()->prepare("INSERT INTO marketing_subscriptions (name, email, consent_ip, consent_ua)
+                           VALUES (:name, :email, :ip, :ua)
+                           ON DUPLICATE KEY UPDATE 
+                               name = VALUES(name), 
+                               consent_at = NOW(), 
+                               consent_ip = VALUES(consent_ip), 
+                               consent_ua = VALUES(consent_ua)");
+    $stmt->execute([
+      ':name'  => $name,
+      ':email' => $email,
+      ':ip'    => $ip,
+      ':ua'    => $ua,
+    ]);
+  } catch (Exception $dbErr) {
+    error_log("DB error: " . $dbErr->getMessage());
+  }
+}
 
   json_exit(true, 'Сообщение отправлено!', ['files' => $savedFiles]);
 } catch (Exception $e) {

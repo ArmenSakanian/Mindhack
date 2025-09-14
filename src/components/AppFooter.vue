@@ -19,7 +19,7 @@
       <div class="footer-legal">
         <ul>
           <li><a href="/privacy">Политика конфиденциальности</a></li>
-          <li><a href="/OfferTerms">Условия оферты</a></li>
+          <li><a href="/O">Условия оферты</a></li>
         </ul>
       </div>
 
