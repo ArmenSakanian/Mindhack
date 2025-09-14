@@ -110,7 +110,7 @@
               :disabled="featureInput.length === 0 || form.features.length >= FEAT_MAX"
               title="Добавить фичу"
             >Добавить</button>
-            <span class="kw-count">{{ form.features.length }}/{{ FEAT_MAX }}</span>
+            <span class="kw-count">{{ form.features.length }}/{{ FEAT_MAX_LABEL }}</span>
           </div>
 
           <div class="chips" v-if="form.features.length">
@@ -121,7 +121,7 @@
           </div>
 
           <small v-if="touched.features && !valid.features" class="error">
-            Нужно от {{ FEAT_MIN }} до {{ FEAT_MAX }} пунктов.
+            Нужно минимум {{ FEAT_MIN }} пункт(а).
           </small>
         </div>
 
@@ -144,23 +144,56 @@
           </div>
         </div>
 
-        <!-- Фото -->
+        <!-- Галерея (мультизагрузка) -->
         <div class="field">
-          <label for="image">Фото продукта (обложка) <span class="req">*</span></label>
-          <input
-            id="image"
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            @change="onImageChange"
-            :class="{ invalid: touched.image && !valid.image }"
-            @blur="touched.image = true"
-          />
-          <small class="hint">PNG / JPG / WEBP, до 5 МБ.</small>
-          <small v-if="touched.image && !valid.image" class="error">Загрузите корректное изображение.</small>
+          <label for="images">Галерея фото <span class="req">*</span></label>
 
-          <div v-if="form.imagePreview" class="preview wide">
-            <img :src="form.imagePreview" alt="Предпросмотр" />
+          <!-- Зона dnd/кнопка выбора -->
+          <div
+            class="dropzone"
+            @dragover.prevent
+            @dragenter.prevent="dragOver = true"
+            @dragleave.prevent="dragOver = false"
+            @drop.prevent="onDrop"
+            :class="{ over: dragOver }"
+          >
+            <input
+              id="images"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              class="hidden-input"
+              @change="onImagesPicked"
+            />
+            <p class="muted small">
+              Перетащите файлы сюда или <label for="images" class="pick">выберите на устройстве</label>
+              <br/>PNG / JPG / WEBP, до 5 МБ. Максимум {{ IMAGES_MAX }} файлов.
+            </p>
           </div>
+
+          <!-- Превью галереи -->
+          <div v-if="galleryList.length" class="gallery-grid">
+            <div
+              class="g-item"
+              v-for="(img, i) in galleryList"
+              :key="img.key"
+            >
+              <img :src="img.preview" :alt="img.alt || 'Фото '+(i+1)" />
+              <div class="g-badges">
+                <span v-if="img.is_primary" class="badge primary">обложка</span>
+                <span v-if="img.existing" class="badge">сохранено</span>
+                <span v-else class="badge">новое</span>
+              </div>
+              <div class="g-actions">
+                <button type="button" class="icon" title="Сделать обложкой" @click="makePrimary(i)">★</button>
+                <button type="button" class="icon" title="Вверх" @click="moveUp(i)" :disabled="i===0">↑</button>
+                <button type="button" class="icon" title="Вниз" @click="moveDown(i)" :disabled="i===galleryList.length-1">↓</button>
+                <button type="button" class="icon danger" title="Удалить" @click="removeImage(i)">🗑</button>
+              </div>
+            </div>
+          </div>
+
+          <small v-if="touched.images && !valid.images" class="error">Загрузите хотя бы одно фото.</small>
         </div>
 
         <!-- Кнопки -->
@@ -235,9 +268,9 @@
             </div>
           </div>
 
-          <!-- Правая часть: фото -->
+          <!-- Правая часть: фото (обложка) -->
           <div class="thumb">
-            <img :src="p.imagePreview" alt="" />
+            <img :src="p.coverPreview" alt="" />
           </div>
 
           <!-- Действия -->
@@ -270,9 +303,11 @@ const API_PRODUCTS = {
 
 /* ===== Константы ===== */
 const FEAT_MIN = 1
-const FEAT_MAX = 6
+const FEAT_MAX = Infinity // безлимит по фичам
+const FEAT_MAX_LABEL = '∞'
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+const IMAGES_MAX = 10
 
 /* ===== Состояние ===== */
 const products = reactive([])
@@ -294,8 +329,12 @@ const blankForm = () => ({
   tagline: '',
   features: [],
   price: null,
-  imageFile: null,
-  imagePreview: ''
+
+  // Галерея
+  // Существующие из БД
+  existingImages: /** @type {Array<{id:number,url:string,url_full?:string,alt?:string,sort:number,is_primary:number}>} */([]),
+  // Новые (пока не отправленные на сервер)
+  newImages: /** @type {Array<{file:File, preview:string}>} */([]),
 })
 
 const form = reactive(blankForm())
@@ -306,32 +345,161 @@ const touched = reactive({
   tagline: false,
   features: false,
   price: false,
-  image: false
+  images: false
+})
+
+/* ===== Локальное представление галереи для UI (смешиваем существующие и новые) ===== */
+/**
+ * galleryList — единый список для отображения и сортировки.
+ * Элемент:
+ *  - existing: true|false
+ *  - id (для существующих)
+ *  - url/url_full (для существующих)
+ *  - file + preview (для новых)
+ *  - is_primary (число 0/1)
+ *  - key — уникальный ключ для v-for
+ */
+const galleryList = computed(() => {
+  // существующие в порядке sort ASC, id ASC, но если есть is_primary — пусть она отображается первой
+  const existing = [...form.existingImages]
+    .sort((a,b) => (b.is_primary - a.is_primary) || (a.sort - b.sort) || (a.id - b.id))
+    .map(img => ({
+      existing: true,
+      id: img.id,
+      url: img.url,
+      url_full: img.url_full,
+      alt: img.alt || '',
+      is_primary: Number(img.is_primary) === 1,
+      preview: img.url_full || toAbsoluteUrl(img.url || ''),
+      key: `ex_${img.id}`
+    }))
+
+  const fresh = form.newImages.map((ni, idx) => ({
+    existing: false,
+    file: ni.file,
+    preview: ni.preview,
+    alt: '',
+    is_primary: false, // новые по умолчанию не обложка
+    key: `new_${idx}_${ni.preview}`
+  }))
+
+  return [...existing, ...fresh]
 })
 
 /* ===== Чипы (фичи) ===== */
 const featureInput = ref('')
-const featPlaceholder = computed(() =>
-  form.features.length >= FEAT_MAX ? 'Достигнут лимит' : 'Введите фичу и нажмите «Добавить»'
-)
+const featPlaceholder = computed(() => 'Введите фичу и нажмите «Добавить»')
+
 function addFeature () {
   const val = featureInput.value.trim()
   if (!val) return
-  if (form.features.length >= FEAT_MAX) return notify(`Максимум ${FEAT_MAX} пунктов`, 'warn')
   const lower = val.toLowerCase()
-  if (form.features.some(k => k.toLowerCase() === lower)) return notify('Такой пункт уже добавлен', 'warn')
-  form.features.push(val); featureInput.value = ''; touched.features = true
+  if (form.features.some(k => k.toLowerCase() === lower)) {
+    return notify('Такой пункт уже добавлен', 'warn')
+  }
+  form.features.push(val)
+  featureInput.value = ''
+  touched.features = true
 }
 function removeFeature (i) { form.features.splice(i,1); touched.features = true }
 
-/* ===== Изображение ===== */
-function onImageChange (e) {
-  const file = e.target.files?.[0]; if (!file) return
-  if (!ACCEPTED_TYPES.includes(file.type)) { touched.image = true; return notify('Недопустимый формат. Разрешены PNG/JPG/WEBP.', 'error') }
-  if (file.size > IMAGE_MAX_BYTES)        { touched.image = true; return notify('Файл слишком большой (до 5 МБ).', 'error') }
-  form.imageFile = file
-  form.imagePreview = URL.createObjectURL(file)
-  touched.image = true
+/* ===== Галерея: ввод ===== */
+const dragOver = ref(false)
+
+function onImagesPicked (e) {
+  const files = Array.from(e.target.files || [])
+  addNewFiles(files)
+  e.target.value = '' // сброс для повторного выбора тех же файлов
+}
+function onDrop (e) {
+  dragOver.value = false
+  const files = Array.from(e.dataTransfer?.files || [])
+  addNewFiles(files)
+}
+function addNewFiles (files) {
+  if (!files.length) return
+  const allCount = form.existingImages.length + form.newImages.length
+  if (allCount + files.length > IMAGES_MAX) {
+    return notify(`Максимум ${IMAGES_MAX} фото в галерее.`, 'warn')
+  }
+  const accepted = []
+  for (const f of files) {
+    if (!ACCEPTED_TYPES.includes(f.type)) { notify(`Формат «${f.name}» не поддерживается.`, 'error'); continue }
+    if (f.size > IMAGE_MAX_BYTES) { notify(`Файл «${f.name}» слишком большой (до 5 МБ).`, 'error'); continue }
+    accepted.push(f)
+  }
+  for (const f of accepted) {
+    const url = URL.createObjectURL(f)
+    form.newImages.push({ file: f, preview: url })
+  }
+  touched.images = true
+}
+
+/* ===== Галерея: действия ===== */
+function makePrimary (idx) {
+  // Сначала снимем со всех
+  const list = galleryList.value
+  list.forEach((it) => (it.is_primary = false))
+  // Отметим выбранный
+  list[idx].is_primary = true
+  // Применим назад в form.existingImages/newImages
+  writeBackGallery(list)
+}
+
+function moveUp (idx) {
+  if (idx === 0) return
+  const list = galleryList.value
+  const a = list[idx - 1]; const b = list[idx]
+  list[idx - 1] = b; list[idx] = a
+  writeBackGallery(list)
+}
+function moveDown (idx) {
+  const list = galleryList.value
+  if (idx >= list.length - 1) return
+  const a = list[idx]; const b = list[idx + 1]
+  list[idx] = b; list[idx + 1] = a
+  writeBackGallery(list)
+}
+
+function removeImage (idx) {
+  const list = galleryList.value
+  const it = list[idx]
+  if (it.existing) {
+    // пометим на удаление: удаляем из existingImages
+    form.existingImages = form.existingImages.filter(x => x.id !== it.id)
+  } else {
+    // убрать новый
+    const pos = form.newImages.findIndex(x => x.preview === it.preview)
+    if (pos !== -1) {
+      URL.revokeObjectURL(form.newImages[pos].preview)
+      form.newImages.splice(pos, 1)
+    }
+  }
+  touched.images = true
+}
+
+/** Переносим изменения порядка/обложки из galleryList обратно в form */
+function writeBackGallery (list) {
+  // Разделим обратно на существующие/новые, сохраним их относительный порядок
+  const ex = []; const nw = []
+  for (const item of list) {
+    if (item.existing) {
+      ex.push({
+        id: item.id,
+        url: item.url,
+        url_full: item.url_full,
+        alt: item.alt,
+        sort: 0, // выставим позже по порядку
+        is_primary: item.is_primary ? 1 : 0
+      })
+    } else {
+      const found = form.newImages.find(x => x.preview === item.preview)
+      if (found) nw.push(found)
+    }
+  }
+  // Перезаписываем массивы
+  form.existingImages = ex.map((e, i) => ({ ...e, sort: i + 1 }))
+  form.newImages = nw
 }
 
 /* ===== Валидация ===== */
@@ -340,12 +508,16 @@ const valid = reactive({
   get eyebrow  () { return form.eyebrow.length > 0 },
   get title    () { return form.title.length > 0 },
   get tagline  () { return form.tagline.length > 0 },
-  get features () { return form.features.length >= FEAT_MIN && form.features.length <= FEAT_MAX },
+  get features () { return form.features.length >= FEAT_MIN },
   get price    () { return typeof form.price === 'number' && form.price > 0 },
-  get image    () { return !!form.imagePreview }
+  get images   () {
+    const count = form.existingImages.length + form.newImages.length
+    return count >= 1
+  }
 })
-const isFormValid = computed(() => valid.category && valid.eyebrow && valid.title && valid.tagline && valid.features && valid.price && valid.image)
-
+const isFormValid = computed(() =>
+  valid.category && valid.eyebrow && valid.title && valid.tagline && valid.features && valid.price && valid.images
+)
 function snapshotForm (obj = form) {
   return JSON.stringify({
     category_id: obj.category_id,
@@ -355,10 +527,14 @@ function snapshotForm (obj = form) {
     tagline: obj.tagline,
     features: obj.features.slice(),
     price: obj.price,
-    imagePreview: obj.imagePreview
+    // Для простоты — только состав коллекции
+    existingIds: obj.existingImages.map(x => x.id),
+    newCount: obj.newImages.length
   })
 }
-const isDirty = computed(() => mode.value === 'create' ? isFormValid.value : (initialSnapshot.value ? snapshotForm() !== initialSnapshot.value : true))
+const isDirty = computed(() =>
+  mode.value === 'create' ? isFormValid.value : (initialSnapshot.value ? snapshotForm() !== initialSnapshot.value : true)
+)
 
 /* ===== Вспомогательное ===== */
 function notify (message, type = 'info', ms = 2200) {
@@ -381,6 +557,15 @@ function toAbsoluteUrl (relOrAbs) {
   const path = relOrAbs.startsWith('/') ? relOrAbs : `/${relOrAbs}`
   return origin + path
 }
+function pickCoverUrl (r) {
+  // сначала ищем is_primary, иначе берем первую
+  if (Array.isArray(r.images) && r.images.length) {
+    const sorted = [...r.images].sort((a,b) => (b.is_primary - a.is_primary) || (a.sort - b.sort) || (a.id - b.id))
+    const first = sorted[0]
+    return first.url_full || toAbsoluteUrl(first.url || '')
+  }
+  return r.image_url || toAbsoluteUrl(r.image || '')
+}
 function mapProduct(r) {
   return {
     id: Number(r.id),
@@ -392,7 +577,9 @@ function mapProduct(r) {
     features: Array.isArray(r.features) ? r.features : [],
     price: Number(r.price),
     image: r.image || '',
-    imagePreview: r.image_url || toAbsoluteUrl(r.image || '')
+    image_url: r.image_url || '',
+    images: Array.isArray(r.images) ? r.images : [],
+    coverPreview: pickCoverUrl(r),
   }
 }
 
@@ -419,7 +606,7 @@ async function fetchProducts () {
     products.splice(0, products.length, ...items.map(mapProduct))
   } catch (e) {
     notify(`Не удалось загрузить продукты: ${e.message}`, 'error', 3000)
-    products.splice(0, products.length) // очистим
+    products.splice(0, products.length)
   } finally {
     loading.value = false
   }
@@ -435,7 +622,11 @@ async function createProduct () {
     fd.append('tagline', form.tagline)
     fd.append('features', JSON.stringify(form.features))
     fd.append('price', String(form.price))
-    if (form.imageFile) fd.append('image', form.imageFile)
+
+    // отправляем все новые фото как images[]
+    for (const it of form.newImages) {
+      fd.append('images[]', it.file)
+    }
 
     const res = await fetch(API_PRODUCTS.create, { method: 'POST', body: fd })
     const data = await res.json()
@@ -464,7 +655,33 @@ async function updateProduct () {
     fd.append('tagline', form.tagline)
     fd.append('features', JSON.stringify(form.features))
     fd.append('price', String(form.price))
-    if (form.imageFile) fd.append('image', form.imageFile) // опционально
+
+    // Новые файлы
+    for (const it of form.newImages) {
+      fd.append('images[]', it.file)
+    }
+
+    // Удаления (id существующих)
+    const existingIdsCurrent = form.existingImages.map(x => x.id)
+    const existingIdsOriginal = (initialSnapshot.value ? JSON.parse(initialSnapshot.value).existingIds : [])
+    const toDelete = existingIdsOriginal.filter(id => !existingIdsCurrent.includes(id))
+    if (toDelete.length) {
+      fd.append('image_ids_to_delete', JSON.stringify(toDelete))
+    }
+
+    // Порядок изображений: по текущему galleryList
+    const orderIds = galleryList.value
+      .filter(it => it.existing)      // только существующие имеют id
+      .map(it => it.id)
+    if (orderIds.length) {
+      fd.append('images_order', JSON.stringify(orderIds))
+    }
+
+    // Обложка: если в списке есть existing с is_primary
+    const primaryExisting = galleryList.value.find(it => it.existing && it.is_primary)
+    if (primaryExisting) {
+      fd.append('primary_id', String(primaryExisting.id))
+    }
 
     const res = await fetch(API_PRODUCTS.update, { method: 'POST', body: fd })
     const data = await res.json()
@@ -479,6 +696,7 @@ async function updateProduct () {
     const idx = products.findIndex(p => p.id === updated.id)
     if (idx !== -1) products[idx] = updated
 
+    // Сбросим редактор
     initialSnapshot.value = snapshotForm()
     notify('Изменения сохранены.', 'success')
   } catch (e) {
@@ -509,7 +727,7 @@ async function deleteProduct (id) {
 
 /* ===== Обработчики формы ===== */
 async function onSubmit () {
-  touched.category = touched.eyebrow = touched.title = touched.tagline = touched.features = touched.price = touched.image = true
+  touched.category = touched.eyebrow = touched.title = touched.tagline = touched.features = touched.price = touched.images = true
   syncCategoryTitle()
   if (!isFormValid.value) return notify('Проверьте форму — есть ошибки.', 'error')
 
@@ -531,34 +749,49 @@ function startEdit (p) {
   form.tagline = p.tagline
   form.features = p.features.slice()
   form.price = p.price
-  form.imageFile = null
-  form.imagePreview = p.imagePreview
+
+  // Подтянем существующие изображения из p.images
+  const ex = Array.isArray(p.images) ? p.images : []
+  // нормализуем sort по порядку отображения (обложка первой)
+  const sorted = [...ex].sort((a,b) => (b.is_primary - a.is_primary) || (a.sort - b.sort) || (a.id - b.id))
+  form.existingImages = sorted.map((img, idx) => ({
+    id: Number(img.id),
+    url: img.url || '',
+    url_full: img.url_full || '',
+    alt: img.alt || '',
+    sort: idx + 1,
+    is_primary: Number(img.is_primary) === 1 ? 1 : 0
+  }))
+
+  // Новые изображения очищаем
+  for (const ni of form.newImages) { URL.revokeObjectURL(ni.preview) }
+  form.newImages = []
+
   resetTouched()
-  initialSnapshot.value = snapshotForm()
+  initialSnapshot.value = JSON.stringify({
+    category_id: form.category_id,
+    category_title: form.category_title,
+    eyebrow: form.eyebrow,
+    title: form.title,
+    tagline: form.tagline,
+    features: form.features.slice(),
+    price: form.price,
+    existingIds: form.existingImages.map(x => x.id),
+    newCount: 0
+  })
   notify('Режим редактирования.', 'info')
 }
 
 function cancelEdit () {
-  if (initialSnapshot.value) {
-    const snap = JSON.parse(initialSnapshot.value)
-    form.category_id = snap.category_id
-    form.category_title = snap.category_title
-    form.eyebrow = snap.eyebrow
-    form.title = snap.title
-    form.tagline = snap.tagline
-    form.features = snap.features.slice()
-    form.price = snap.price
-    form.imagePreview = snap.imagePreview
-    form.imageFile = null
-  } else {
-    resetForm()
-  }
+  resetForm()
   mode.value = 'create'
   editingId.value = null
   notify('Редактирование отменено.', 'info')
 }
 
 function resetForm () {
+  // очистим url-объекты
+  for (const ni of form.newImages) { URL.revokeObjectURL(ni.preview) }
   Object.assign(form, blankForm())
   resetTouched()
   mode.value = 'create'
@@ -567,7 +800,7 @@ function resetForm () {
 }
 
 function resetTouched () {
-  touched.category = touched.eyebrow = touched.title = touched.tagline = touched.features = touched.price = touched.image = false
+  touched.category = touched.eyebrow = touched.title = touched.tagline = touched.features = touched.price = touched.images = false
 }
 
 function confirmDelete (p) {
@@ -585,7 +818,6 @@ onMounted(async () => {
   await Promise.all([loadCategoryOptions(), fetchProducts()])
 })
 </script>
-
 
 <style scoped>
 /* ===== Фон страницы — как у категорий ===== */
@@ -692,37 +924,56 @@ input.invalid, textarea.invalid, select.invalid {
 .chip .x { background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; }
 .chip .x:hover { color: var(--error); }
 
-/* Превью фото */
-.preview.wide {
+/* Dropzone */
+.dropzone {
+  margin-top: 6px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(8,10,16,.6);
+}
+.dropzone.over { border-color: rgba(122,92,255,.65); box-shadow: 0 0 0 3px rgba(122,92,255,.15); }
+.dropzone .pick { color: #e7e2ff; text-decoration: underline; cursor: pointer; }
+.hidden-input { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* Галерея превью */
+.gallery-grid {
   margin-top: 10px;
-  width: 100%;
-  max-width: 720px;
-  aspect-ratio: 16 / 9;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.g-item {
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
   background: rgba(8,10,16,.6);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
 }
-.preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.g-item img { display: block; width: 100%; height: 140px; object-fit: cover; }
+.g-badges {
+  position: absolute; left: 8px; top: 8px; display: flex; gap: 6px; flex-wrap: wrap;
+}
+.badge { background: rgba(0,0,0,.55); color: #e9ecf5; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; font-size: 11px; }
+.badge.primary { background: rgba(122,92,255,.75); border-color: rgba(122,92,255,.35); }
 
-/* Кнопки */
-.submit-row { margin-top: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.btn {
-  background: rgba(20, 24, 39, .85);
+.g-actions {
+  position: absolute; right: 8px; top: 8px;
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.icon {
+  background: rgba(0,0,0,.45);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 4px 6px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: transform .1s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
-  font-weight: 700; letter-spacing: .2px;
+  transition: background .15s ease, transform .08s ease;
+  font-size: 13px;
 }
-.btn:hover { transform: translateY(-1px); border-color: #3b3f5c; box-shadow: 0 8px 26px rgba(0,0,0,.3); }
-.btn.primary { background: var(--primary); border-color: transparent; color: white; }
-.btn.primary:hover { background: var(--primary-600); }
-.btn.ghost { background: transparent; }
-.btn:disabled { opacity: .55; cursor: not-allowed; }
+.icon:hover { background: rgba(255,255,255,.08); transform: translateY(-1px); }
+.icon.danger:hover { background: rgba(255,0,0,.12); }
 
 /* Список продуктов (горизонтальные карточки) */
 .list-card .list-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
