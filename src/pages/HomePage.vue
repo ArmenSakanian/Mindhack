@@ -4,6 +4,7 @@
     <CategoryGrid />
     <AboutUs />
     <ContactForm />
+    <FaqAccordion />
   </div>
 </template>
 
@@ -12,6 +13,7 @@ import VideoBanner from "../components/VideoBanner.vue";
 import CategoryGrid from "../components/CategoryGrid.vue";
 import AboutUs from "../components/AboutUs.vue";
 import ContactForm from "../components/ContactForm.vue";
+import FaqAccordion from "../components/FaqAccordion.vue";
 
 export default {
   name: "HomePage",
@@ -20,6 +22,8 @@ export default {
     CategoryGrid,
     AboutUs,
     ContactForm,
+    FaqAccordion,
+
   },
 };
 </script>
