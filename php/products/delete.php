@@ -4,31 +4,40 @@
  * Методы: POST (JSON/form) или DELETE (JSON) — поле id
  */
 declare(strict_types=1);
+
 header('Content-Type: application/json; charset=utf-8');
+// CORS (можно убрать, если не нужно)
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if ($method === 'OPTIONS') { http_response_code(204); exit; }
 
 require_once __DIR__ . '/../db.php';
 $pdo = db();
 
-$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$id = null;
-
-if ($method === 'POST') {
-  if (isset($_POST['id'])) $id = (int)$_POST['id'];
-  if (!$id) {
+/** Универсальное чтение id из POST/JSON */
+function read_id(): ?int {
+  $m = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+  if ($m === 'POST') {
+    if (isset($_POST['id'])) return (int)$_POST['id'];
     $raw = file_get_contents('php://input');
-    $j = $raw ? json_decode($raw, true) : null;
-    if (is_array($j) && isset($j['id'])) $id = (int)$j['id'];
+    if ($raw) { $j = json_decode($raw, true); if (is_array($j) && isset($j['id'])) return (int)$j['id']; }
+  } elseif ($m === 'DELETE') {
+    $raw = file_get_contents('php://input');
+    if ($raw) { $j = json_decode($raw, true); if (is_array($j) && isset($j['id'])) return (int)$j['id']; }
   }
-} elseif ($method === 'DELETE') {
-  $raw = file_get_contents('php://input');
-  $j = $raw ? json_decode($raw, true) : null;
-  if (is_array($j) && isset($j['id'])) $id = (int)$j['id'];
-} else {
+  return null;
+}
+
+if (!in_array($method, ['POST','DELETE'], true)) {
   http_response_code(405);
   echo json_encode(['ok'=>false,'message'=>'Метод не поддерживается. Используйте POST или DELETE.'], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
+$id = read_id();
 if (!$id || $id < 1) {
   http_response_code(422);
   echo json_encode(['ok'=>false,'message'=>'Некорректный id продукта.'], JSON_UNESCAPED_UNICODE);
@@ -72,22 +81,37 @@ try {
   exit;
 }
 
-/** ===== Удалим сам продукт (галерея удалится каскадом по FK) ===== */
+/** ===== Удалим записи в БД =====
+ * Если у тебя FK (product_images.product_id) ON DELETE CASCADE — достаточно удалить только из products.
+ * Но на всякий случай сначала чистим галерею явно, это не повредит даже при каскаде.
+ */
 try {
-  $del = $pdo->prepare("DELETE FROM products WHERE id=:id LIMIT 1");
-  $del->execute([':id'=>$id]);
-  if ($del->rowCount() < 1) {
+  $pdo->beginTransaction();
+
+  // 1) Галерея (подстраховка, вдруг нет каскада)
+  $delImgs = $pdo->prepare("DELETE FROM product_images WHERE product_id=:pid");
+  $delImgs->execute([':pid'=>$id]);
+
+  // 2) Сам продукт
+  $delProd = $pdo->prepare("DELETE FROM products WHERE id=:id LIMIT 1");
+  $delProd->execute([':id'=>$id]);
+  if ($delProd->rowCount() < 1) {
+    $pdo->rollBack();
     http_response_code(500);
     echo json_encode(['ok'=>false,'message'=>'Не удалось удалить продукт.'], JSON_UNESCAPED_UNICODE);
     exit;
   }
+
+  $pdo->commit();
+
 } catch (Throwable $e) {
+  if ($pdo->inTransaction()) $pdo->rollBack();
   http_response_code(500);
   echo json_encode(['ok'=>false,'message'=>'Ошибка БД при удалении продукта.'], JSON_UNESCAPED_UNICODE);
   exit;
 }
 
-/** ===== Физически удалим файлы изображений (после успешного удаления БД) ===== */
+/** ===== Физически удалим файлы изображений (после успешного удаления из БД) ===== */
 $projectRoot = dirname(__DIR__, 2);
 $uploadsDir  = $projectRoot . '/uploads/product';
 $uploadsReal = realpath($uploadsDir);
@@ -97,8 +121,9 @@ $attempted = 0;
 if (!empty($filesToDelete) && $uploadsReal) {
   foreach ($filesToDelete as $relUrl) {
     $attempted++;
+
     // нормализуем относительный путь
-    $rel = $relUrl[0] === '/' ? substr($relUrl, 1) : $relUrl;
+    $rel = ltrim($relUrl, '/\\'); // убираем ведущий слэш
     $abs = $projectRoot . DIRECTORY_SEPARATOR . $rel;
 
     // безопасность: удаляем только из /uploads/product

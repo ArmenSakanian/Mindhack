@@ -1,6 +1,6 @@
 <template>
   <div>
-    <VideoBanner />
+    <slide />
     <CategoryGrid />
     <AboutUs />
     <ContactForm />
@@ -9,7 +9,7 @@
 </template>
 
 <script>
-import VideoBanner from "../components/VideoBanner.vue";
+import slide from "../components/slide.vue";
 import CategoryGrid from "../components/CategoryGrid.vue";
 import AboutUs from "../components/AboutUs.vue";
 import ContactForm from "../components/ContactForm.vue";
@@ -18,7 +18,7 @@ import FaqAccordion from "../components/FaqAccordion.vue";
 export default {
   name: "HomePage",
   components: {
-    VideoBanner,
+    slide,
     CategoryGrid,
     AboutUs,
     ContactForm,

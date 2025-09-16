@@ -1,6 +1,19 @@
 <?php
 declare(strict_types=1);
+
 header('Content-Type: application/json; charset=utf-8');
+// CORS (по желанию)
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, PUT, PATCH, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if ($method === 'OPTIONS') { http_response_code(204); exit; }
+if (!in_array($method, ['POST','PUT','PATCH'], true)) {
+  http_response_code(405);
+  echo json_encode(['ok'=>false,'message'=>'Метод не поддерживается.'], JSON_UNESCAPED_UNICODE);
+  exit;
+}
 
 require_once __DIR__ . '/../db.php';
 $pdo = db();
@@ -15,21 +28,21 @@ $projectRoot = dirname(__DIR__, 2);
 $uploadsDir  = $projectRoot . '/uploads/product';
 if (!is_dir($uploadsDir)) { @mkdir($uploadsDir, 0775, true); }
 
+/** ========= Базовый URL для абсолютных ссылок ========= */
+$scheme  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host    = $_SERVER['HTTP_HOST'] ?? '';
+$baseUrl = $host ? ($scheme . '://' . $host) : '';
+
 /** ========= Чтение входящих данных ========= */
-$method  = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $payload = []; $files = [];
 
 if ($method === 'POST') {
-  $payload = $_POST; 
+  $payload = $_POST;
   $files   = $_FILES;
-} elseif ($method === 'PUT' || $method === 'PATCH') {
+} else { // PUT/PATCH — предполагаем JSON
   $raw = file_get_contents('php://input');
   $j = $raw ? json_decode($raw, true) : null;
   if (is_array($j)) $payload = $j;
-} else {
-  http_response_code(405);
-  echo json_encode(['ok'=>false,'message'=>'Метод не поддерживается.'], JSON_UNESCAPED_UNICODE);
-  exit;
 }
 
 /** ========= Поля продукта ========= */
@@ -38,6 +51,7 @@ $category_id = isset($payload['category_id']) ? (int)$payload['category_id'] : 0
 $eyebrow     = trim((string)($payload['eyebrow'] ?? ''));
 $title       = trim((string)($payload['title'] ?? ''));
 $tagline     = trim((string)($payload['tagline'] ?? ''));
+$link_url    = trim((string)($payload['link_url'] ?? ''));
 $priceRaw    = $payload['price'] ?? null;
 
 /** features: JSON или массив */
@@ -95,10 +109,20 @@ if ($category_id < 1) $errors[]='Выберите категорию.';
 if ($eyebrow === '')  $errors[]='Заполните верхнюю подпись.';
 if ($title === '')    $errors[]='Заполните заголовок.';
 if ($tagline === '')  $errors[]='Заполните описание.';
-$price=null;
-if ($priceRaw===null || $priceRaw==='' || !is_numeric($priceRaw)) $errors[]='Введите корректную цену.';
-else { $price=(float)$priceRaw; if ($price<=0) $errors[]='Цена должна быть больше 0.'; }
 if (count($features) < 1) $errors[]='Нужно минимум 1 пункт.';
+
+/** link_url обязателен и http/https */
+if ($link_url === '') {
+  $errors[] = 'Поле ссылки не может быть пустым.';
+}
+
+/** price */
+$price=null;
+if ($priceRaw===null || $priceRaw==='' || !is_numeric($priceRaw)) {
+  $errors[]='Введите корректную цену.';
+} else {
+  $price=(float)$priceRaw; if ($price<=0) $errors[]='Цена должна быть больше 0.';
+}
 
 /** ========= Новые изображения из формы ========= */
 $newFiles = []; // нормализованный массив файлов (images[] или legacy image)
@@ -130,8 +154,7 @@ if (isset($files['images'])) {
       ];
     }
   } else {
-    // одиночный legacy
-    if (!empty($f['tmp_name'])) $newFiles[] = $f;
+    if (!empty($f['tmp_name'])) $newFiles[] = $f; // одиночный legacy
   }
 }
 
@@ -143,21 +166,17 @@ $suspects = [];
 if (empty($errors) && !empty($newFiles)) {
   foreach ($newFiles as $idx => $file) {
     if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
-      $errors[] = 'Файл #' . ($idx+1) . ' не загружен.';
-      break;
+      $errors[] = 'Файл #' . ($idx+1) . ' не загружен.'; break;
     }
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-      $errors[] = 'Ошибка загрузки файла #' . ($idx+1) . '.';
-      break;
+    if ((int)$file['error'] !== UPLOAD_ERR_OK) {
+      $errors[] = 'Ошибка загрузки файла #' . ($idx+1) . '.'; break;
     }
     $mime = @mime_content_type($file['tmp_name']) ?: $file['type'];
     if (!isset($ACCEPT[$mime])) {
-      $errors[] = 'Недопустимый формат файла #' . ($idx+1) . '. Разрешены PNG/JPG/WEBP.';
-      break;
+      $errors[] = 'Недопустимый формат файла #' . ($idx+1) . '. Разрешены PNG/JPG/WEBP.'; break;
     }
-    if ($file['size'] > IMAGE_MAX_BYTES) {
-      $errors[] = 'Файл #' . ($idx+1) . ' слишком большой (до 5 МБ).';
-      break;
+    if ((int)$file['size'] > IMAGE_MAX_BYTES) {
+      $errors[] = 'Файл #' . ($idx+1) . ' слишком большой (до 5 МБ).'; break;
     }
     $suspects[] = $mime;
   }
@@ -200,6 +219,23 @@ try {
   exit;
 }
 
+/** ========= Проверка лимита на общее количество фото ========= */
+try {
+  $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM product_images WHERE product_id=:pid");
+  $cntStmt->execute([':pid'=>$id]);
+  $currentCount = (int)$cntStmt->fetchColumn();
+  $toDeleteCount = count($deleteIds);
+  $incomingCount = count($newFiles);
+  $futureTotal = $currentCount - $toDeleteCount + $incomingCount;
+  if ($futureTotal > IMAGES_MAX_COUNT) {
+    http_response_code(422);
+    echo json_encode(['ok'=>false,'message'=>'Превышен лимит изображений: максимум ' . IMAGES_MAX_COUNT . '.'], JSON_UNESCAPED_UNICODE);
+    exit;
+  }
+} catch (Throwable $e) {
+  // не критично, пропустим
+}
+
 /** ========= Подготовка файлов: перенос на диск ========= */
 $savedFilesAbs = [];
 $savedUrls     = [];
@@ -225,13 +261,14 @@ if (!empty($newFiles)) {
 try {
   $pdo->beginTransaction();
 
-  // 1) Обновляем поля продукта (без image — его синхронизируем после галереи)
+  // 1) Обновляем поля продукта (image синхронизируем после галереи)
   $sql = "UPDATE products SET
             category_id = :cid,
             category_title = :ctitle,
             eyebrow = :eyebrow,
             title = :title,
             tagline = :tagline,
+            link_url = :link_url,
             features = :features,
             price = :price
           WHERE id = :id LIMIT 1";
@@ -242,15 +279,15 @@ try {
     ':eyebrow'  => $eyebrow,
     ':title'    => $title,
     ':tagline'  => $tagline,
+    ':link_url' => $link_url,
     ':features' => json_encode($features, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
     ':price'    => $price,
     ':id'       => $id
   ]);
 
-  // 2) Удаляем отмеченные изображения (список id)
+  // 2) Удаляем отмеченные изображения
   $deletedFilesAbs = [];
   if (!empty($deleteIds)) {
-    // выберем их url для удаления файлов
     $in = implode(',', array_fill(0, count($deleteIds), '?'));
     $sel = $pdo->prepare("SELECT id, url FROM product_images WHERE product_id=? AND id IN ($in)");
     $sel->execute(array_merge([$id], $deleteIds));
@@ -261,11 +298,11 @@ try {
       $del->execute(array_merge([$id], $deleteIds));
 
       // подготовим абсолютные пути для физического удаления после commit
+      $uploadsReal = realpath($uploadsDir);
       foreach ($rowsToDelete as $r) {
-        $rel = $r['url'];
-        if ($rel && $rel[0]==='/') $rel = substr($rel, 1);
+        $rel = (string)$r['url'];
+        $rel = ltrim($rel, '/\\');
         $abs = $projectRoot . DIRECTORY_SEPARATOR . $rel;
-        $uploadsReal = realpath($uploadsDir);
         $absReal = (file_exists($abs) ? realpath($abs) : null);
         if ($uploadsReal && $absReal && str_starts_with($absReal, $uploadsReal)) {
           $deletedFilesAbs[] = $absReal;
@@ -276,8 +313,6 @@ try {
 
   // 3) Вставляем новые изображения (в конец)
   if (!empty($savedUrls)) {
-    // найдём текущий max(sort)
-    $maxSort = 0;
     $q = $pdo->prepare("SELECT COALESCE(MAX(sort),0) FROM product_images WHERE product_id=:pid");
     $q->execute([':pid'=>$id]);
     $maxSort = (int)$q->fetchColumn();
@@ -295,18 +330,16 @@ try {
 
   // 4) Если задан порядок — проставляем sort по массиву id
   if (!empty($orderIds)) {
-    // фильтр: учитываем только реальные картинки продукта
     $in = implode(',', array_fill(0, count($orderIds), '?'));
     $sel = $pdo->prepare("SELECT id FROM product_images WHERE product_id=? AND id IN ($in)");
     $sel->execute(array_merge([$id], $orderIds));
-    $existing = $sel->fetchAll(PDO::FETCH_COLUMN, 0);
-    $existingSet = array_map('intval', $existing);
+    $existing = array_map('intval', $sel->fetchAll(PDO::FETCH_COLUMN, 0));
 
     $sort = 1;
     $upd = $pdo->prepare("UPDATE product_images SET sort=:s WHERE product_id=:pid AND id=:iid");
     foreach ($orderIds as $iid) {
       $iid = (int)$iid;
-      if (in_array($iid, $existingSet, true)) {
+      if (in_array($iid, $existing, true)) {
         $upd->execute([':s'=>$sort, ':pid'=>$id, ':iid'=>$iid]);
         $sort++;
       }
@@ -315,7 +348,6 @@ try {
 
   // 5) Если задан primary_id — переключаем обложку
   if (!is_null($primaryId) && $primaryId > 0) {
-    // убедимся, что такая картинка принадлежит продукту
     $chk = $pdo->prepare("SELECT COUNT(*) FROM product_images WHERE product_id=:pid AND id=:iid");
     $chk->execute([':pid'=>$id, ':iid'=>$primaryId]);
     if ((int)$chk->fetchColumn() === 1) {
@@ -325,7 +357,7 @@ try {
     }
   }
 
-  // 6) Синхронизируем products.image = текущая обложка (или пусто, если нет картинок)
+  // 6) Синхро products.image = текущая обложка (или пусто)
   $cover = $pdo->prepare("SELECT url FROM product_images WHERE product_id=:pid ORDER BY is_primary DESC, sort ASC, id ASC LIMIT 1");
   $cover->execute([':pid'=>$id]);
   $coverUrl = (string)$cover->fetchColumn();
@@ -338,27 +370,42 @@ try {
   // Физически удалим файлы, помеченные к удалению
   foreach ($deletedFilesAbs as $abs) { @unlink($abs); }
 
-  // Ответ с актуальным состоянием продукта и галереи
-  // Подтянем галерею
-  $imgsStmt = $pdo->prepare("SELECT id, url, alt, sort, is_primary FROM product_images WHERE product_id=:pid ORDER BY sort ASC, id ASC");
+  // Галерея для ответа (+ url_full)
+  $imgsStmt = $pdo->prepare("SELECT id, url, alt, sort, is_primary FROM product_images WHERE product_id=:pid ORDER BY is_primary DESC, sort ASC, id ASC");
   $imgsStmt->execute([':pid'=>$id]);
-  $images = $imgsStmt->fetchAll(PDO::FETCH_ASSOC);
+  $images = array_map(function($r) use ($baseUrl){
+    $url = (string)$r['url'];
+    $url_full = $url;
+    if ($url && $baseUrl && strpos($url, 'http') !== 0) {
+      $rel = $url[0] === '/' ? $url : ('/' . $url);
+      $url_full = $baseUrl . $rel;
+    }
+    return [
+      'id'         => (int)$r['id'],
+      'url'        => (string)$r['url'],
+      'url_full'   => $url_full,
+      'alt'        => $r['alt'] ?? null,
+      'sort'       => (int)$r['sort'],
+      'is_primary' => (int)$r['is_primary'],
+    ];
+  }, $imgsStmt->fetchAll(PDO::FETCH_ASSOC));
 
   echo json_encode([
     'ok'=>true,
     'updated'=>1,
     'id'=>$id,
     'product'=>[
-      'id'=>$id,
-      'category_id'=>$category_id,
-      'category_title'=>$catTitle,
-      'eyebrow'=>$eyebrow,
-      'title'=>$title,
-      'tagline'=>$tagline,
-      'features'=>$features,
-      'price'=>$price,
-      'image'=>$coverUrl,
-      'images'=>$images
+      'id'             => $id,
+      'category_id'    => $category_id,
+      'category_title' => $catTitle,
+      'eyebrow'        => $eyebrow,
+      'title'          => $title,
+      'tagline'        => $tagline,
+      'link_url'       => $link_url,
+      'features'       => $features,
+      'price'          => $price,
+      'image'          => $coverUrl,
+      'images'         => $images
     ]
   ], JSON_UNESCAPED_UNICODE);
 

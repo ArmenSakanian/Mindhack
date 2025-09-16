@@ -1,8 +1,15 @@
 <?php
 declare(strict_types=1);
-header('Content-Type: application/json; charset=utf-8');
 
-if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+header('Content-Type: application/json; charset=utf-8');
+// CORS (по желанию)
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if ($method === 'OPTIONS') { http_response_code(204); exit; }
+if ($method !== 'GET') {
   http_response_code(405);
   echo json_encode(['ok'=>false,'message'=>'Метод не поддерживается. Используйте GET.'], JSON_UNESCAPED_UNICODE);
   exit;
@@ -29,7 +36,7 @@ try {
     $stmt->execute([':cid' => $category_id]);
     $total = (int)$stmt->fetchColumn();
 
-    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, features, price, image, created_at, updated_at
+    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, link_url, features, price, image, created_at, updated_at
             FROM products
             WHERE category_id=:cid
             ORDER BY created_at DESC
@@ -38,7 +45,7 @@ try {
     $stmt->bindValue(':cid', $category_id, PDO::PARAM_INT);
   } else {
     $total = (int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
-    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, features, price, image, created_at, updated_at
+    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, link_url, features, price, image, created_at, updated_at
             FROM products
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset";
@@ -69,7 +76,6 @@ if (!empty($productIds)) {
                WHERE product_id IN ($in)
                ORDER BY is_primary DESC, sort ASC, id ASC";
     $stmtImg = $pdo->prepare($sqlImg);
-    // bind list
     foreach ($productIds as $i => $pid) {
       $stmtImg->bindValue($i + 1, $pid, PDO::PARAM_INT);
     }
@@ -79,7 +85,7 @@ if (!empty($productIds)) {
     foreach ($allImgs as $img) {
       $pid = (int)$img['product_id'];
       if (!isset($imagesByProduct[$pid])) $imagesByProduct[$pid] = [];
-      // абсолютный URL
+
       $url = (string)$img['url'];
       $url_full = $url;
       if ($url && $baseUrl && strpos($url, 'http') !== 0) {
@@ -88,7 +94,7 @@ if (!empty($productIds)) {
       }
       $imagesByProduct[$pid][] = [
         'id'         => (int)$img['id'],
-        'url'        => (string)$img['url'],    // относительный путь как хранится в БД
+        'url'        => (string)$img['url'],    // относительный путь как в БД
         'url_full'   => $url_full,              // абсолютная ссылка (удобно фронту)
         'alt'        => $img['alt'] ?? null,
         'sort'       => (int)$img['sort'],
@@ -96,7 +102,7 @@ if (!empty($productIds)) {
       ];
     }
   } catch (Throwable $e) {
-    // Не падаем — просто не вернём images, но логика продуктов продолжится
+    // Не падаем — просто не вернём images, но продукты отдадим
     $imagesByProduct = [];
   }
 }
@@ -109,12 +115,12 @@ $items = array_map(function($r) use ($baseUrl, $imagesByProduct) {
     if (is_array($d)) $features = $d;
   }
 
-  // Абсолютный URL для products.image (обратная совместимость)
+  // Абсолютный URL для products.image (наследие)
   $image = $r['image'] ?? '';
   $image_url = $image;
   if ($image && $baseUrl && strpos($image, 'http') !== 0) {
-    if ($image[0] !== '/') $image = '/' . $image;
-    $image_url = $baseUrl . $image;
+    $imgRel = $image[0] === '/' ? $image : ('/' . $image);
+    $image_url = $baseUrl . $imgRel; // <-- конкатенация строк
   }
 
   $pid = (int)$r['id'];
@@ -123,27 +129,28 @@ $items = array_map(function($r) use ($baseUrl, $imagesByProduct) {
   return [
     'id'             => $pid,
     'category_id'    => (int)$r['category_id'],
-    'category_title' => $r['category_title'],
-    'eyebrow'        => $r['eyebrow'],
-    'title'          => $r['title'],
-    'tagline'        => $r['tagline'],
+    'category_title' => (string)$r['category_title'],
+    'eyebrow'        => (string)$r['eyebrow'],
+    'title'          => (string)$r['title'],
+    'tagline'        => (string)$r['tagline'],
+    'link_url'       => (string)($r['link_url'] ?? ''),
     'features'       => $features,
     'price'          => is_numeric($r['price']) ? (float)$r['price'] : $r['price'],
-    'image'          => $r['image'],     // как было (относительная)
-    'image_url'      => $image_url,      // как было (абсолютная)
-    'images'         => $images,         // НОВОЕ: галерея
+    'image'          => (string)$r['image'],     // относительный
+    'image_url'      => $image_url,              // абсолютный
+    'images'         => $images,                 // галерея
     'created_at'     => $r['created_at'],
     'updated_at'     => $r['updated_at'],
   ];
 }, $rows);
 
-$pages = $limit > 0 ? (int)ceil($total / $limit) : 1;
+$pages = $limit > 0 ? (int)ceil(($total ?? 0) / $limit) : 1;
 
 echo json_encode([
   'ok'    => true,
   'items' => $items,
   'page'  => $page,
   'limit' => $limit,
-  'total' => $total,
+  'total' => $total ?? 0,
   'pages' => $pages
-], JSON_UNESCAPED_UNICODE);
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
