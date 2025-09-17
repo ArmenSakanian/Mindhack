@@ -12,14 +12,15 @@
           <li><a href="#catalog">Категории таблиц</a></li>
           <li><a href="#about">О нас</a></li>
           <li><a href="#contact">Обратная связь</a></li>
+          <li><a href="#faq">Часто задаваемые вопросы</a></li>
         </ul>
       </nav>
 
       <!-- Политики -->
       <div class="footer-legal">
         <ul>
-          <li><a href="/privacy">Политика конфиденциальности</a></li>
-          <li><a href="/O">Условия оферты</a></li>
+          <li><a href="/PrivacyPolicy">Политика конфиденциальности</a></li>
+          <li><a href="/PublicOffer">Условия оферты</a></li>
         </ul>
       </div>
 

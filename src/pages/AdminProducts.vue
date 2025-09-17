@@ -17,14 +17,14 @@
         <div class="form-actions">
           <button
             v-if="mode === 'create'"
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="resetForm()"
           >
             Закрыть
           </button>
 
-          <button v-else class="btn ghost" type="button" @click="cancelEdit">
+          <button v-else class="btn danger sm" type="button" @click="cancelEdit">
             Отмена
           </button>
         </div>
@@ -141,7 +141,7 @@
             />
             <button
               type="button"
-              class="btn"
+              class="btn--primary btn"
               @click="addFeature"
               :disabled="
                 featureInput.length === 0 || form.features.length >= FEAT_MAX
@@ -280,7 +280,7 @@
         <div class="submit-row">
           <button
             v-if="mode === 'create'"
-            class="btn primary"
+            class="btn--primary btn"
             type="submit"
             :disabled="!isFormValid || submitting"
           >
@@ -299,14 +299,14 @@
 
           <button
             v-if="mode === 'create'"
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="resetForm()"
           >
             Закрыть
           </button>
 
-          <button v-else class="btn ghost" type="button" @click="cancelEdit">
+          <button v-else class="btn danger sm" type="button" @click="cancelEdit">
             Закрыть
           </button>
 

@@ -215,7 +215,7 @@ onMounted(fetchFaqs)
 
 /* ===== Список ===== */
 .faq__list {
-  display: grid; gap: 12px; padding: 0; margin: 0; list-style: none;
+  display: grid; gap: 25px; padding: 0; margin: 0; list-style: none;
 }
 .faq__item {
   border: 1px solid #333; border-radius: 10px; overflow: hidden; background: #fff;

@@ -4,6 +4,7 @@
     role="region"
     aria-label="Галерея"
     tabindex="0"
+    id="home"
     @mouseenter="pause()"
     @mouseleave="resume()"
     @keydown.left.prevent="goPrev(true)"

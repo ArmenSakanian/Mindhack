@@ -12,55 +12,77 @@
       </header>
 
       <!-- Сетка категорий -->
-      <div class="row">
-        <article data-aos="fade-up" v-for="cat in categories" :key="cat.id" class="panel">
-          <!-- Медиа -->
-          <div class="media">
-            <img :src="cat.image" :alt="cat.title" loading="lazy" />
-            <div class="badge" v-if="cat.icon">
-              <i :class="cat.icon" aria-hidden="true"></i>
-            </div>
-          </div>
-
-          <!-- Контент -->
-          <div class="body">
-            <div class="eyebrow" v-if="cat.eyebrow">{{ cat.eyebrow }}</div>
-            <h3 class="title">{{ cat.title }}</h3>
-            <p class="tagline" v-if="cat.tagline">{{ cat.tagline }}</p>
-
-            <ul class="perks" v-if="cat.perks?.length">
-              <li v-for="perk in cat.perks" :key="perk">
-                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-                {{ perk }}
-              </li>
-            </ul>
-
-            <div class="meta" v-if="cat.price">
-              <div class="price">от {{ formatPrice(cat.price) }}</div>
-            </div>
-
-            <div class="actions">
-              <router-link
-                class="btn-primary"
-                :to="`/category/${cat.id}`"
-                :aria-label="`Открыть каталог: ${cat.title}`"
-              >
-                <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                Открыть каталог
-              </router-link>
-            </div>
-          </div>
-        </article>
+      <!-- Сетка категорий -->
+<div class="row">
+  <article
+    data-aos="fade-up"
+    v-for="cat in categories"
+    :key="cat.id"
+    class="panel"
+    role="button"
+    tabindex="0"
+    @click="goToCategory(cat.id)"
+    @keypress.enter="goToCategory(cat.id)"
+  >
+    <!-- Медиа -->
+    <div class="media">
+      <img :src="cat.image" :alt="cat.title" loading="lazy" />
+      <div class="badge" v-if="cat.icon">
+        <i :class="cat.icon" aria-hidden="true"></i>
       </div>
+    </div>
+
+    <!-- Контент -->
+    <div class="body">
+      <div class="eyebrow" v-if="cat.eyebrow">{{ cat.eyebrow }}</div>
+      <h3 class="title">{{ cat.title }}</h3>
+      <p class="tagline" v-if="cat.tagline">{{ cat.tagline }}</p>
+
+      <ul class="perks" v-if="cat.perks?.length">
+        <li v-for="perk in cat.perks" :key="perk">
+          <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+          {{ perk }}
+        </li>
+      </ul>
+
+      <div class="meta" v-if="cat.price">
+        <div class="price">
+          <span class="price_text">от </span> {{ formatPrice(cat.price) }}
+        </div>
+      </div>
+
+      <!-- Кнопку можешь оставить или убрать -->
+      <div class="actions">
+        <a
+  class="btn--primary btn"
+  :href="`/category/${cat.id}`"
+  :aria-label="`Открыть каталог: ${cat.title}`"
+  @click.stop
+>
+  <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+  Открыть каталог
+</a>
+      </div>
+    </div>
+  </article>
+</div>
+
     </div>
   </section>
 </template>
 
 <script setup>
 import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 
+const router = useRouter();
 const API_LIST = "/php/categories/list.php";
 const categories = ref([]);
+
+function goToCategory(id) {
+  window.location.href = `/category/${id}`;
+}
+
 
 function toArrayKeywords(k) {
   if (Array.isArray(k)) return k;
@@ -188,21 +210,18 @@ onMounted(loadCategories);
 .panel {
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #11111999;
   border-radius: 22px;
   overflow: hidden;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
-  transition: transform 0.25s ease, background 0.25s ease,
-    border-color 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
 }
-@media (hover: hover) {
-  .panel:hover {
-    transform: translateY(-6px);
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.18);
-    box-shadow: 0 16px 56px rgba(0, 0, 0, 0.35);
-  }
+.panel:hover {
+  transform: translateY(-3px);
+  background: #00000099;
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 16px 56px rgba(0, 0, 0, 0.35);
+  transition: 0.6s;
 }
 
 /* ====== МЕДИА ====== */
@@ -260,6 +279,8 @@ onMounted(loadCategories);
   font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  font-style: italic;
+  font-weight: 200;
 }
 .title {
   margin: 0;
@@ -272,6 +293,7 @@ onMounted(loadCategories);
   margin: 4px 0 2px;
   color: #d9d2eb;
   font-size: clamp(14px, 1.8vw, 18px);
+  font-weight: 100;
 }
 .perks {
   display: grid;
@@ -288,6 +310,7 @@ onMounted(loadCategories);
   color: #fff;
   font-size: 15px;
   line-height: 1.3;
+  font-weight: 300;
 }
 .perks i {
   color: var(--accent-color);
@@ -308,37 +331,18 @@ onMounted(loadCategories);
   color: var(--accent-color);
 }
 
+.price_text {
+  font-weight: 200;
+}
+
 /* ====== КНОПКА ====== */
 .actions {
   margin-top: auto; /* прижимаем вниз */
   margin-bottom: 10px; /* зазор от нижнего края */
 }
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 20px;
-  border-radius: 14px;
-  border: none;
-  font-weight: 800;
-  font-size: 16px;
-  background: var(--accent-color);
-  color: #1b1230;
-  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-  text-decoration: none;
-}
-.btn-primary:hover {
-  transform: translateY(-2px);
-  background: #ffae33;
-}
-.btn-primary:focus-visible {
-  outline: 2px solid #ffae33;
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(255, 174, 51, 0.25);
-}
+
 @media (max-width: 480px) {
-  .btn-primary {
+  .btn--primary {
     width: 100%;
   }
 }
@@ -347,7 +351,7 @@ onMounted(loadCategories);
 @media (prefers-reduced-motion: reduce) {
   .panel,
   .media img,
-  .btn-primary {
+  .btn--primary {
     transition: none;
   }
 }

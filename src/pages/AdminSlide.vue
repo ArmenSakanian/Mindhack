@@ -36,7 +36,7 @@
       </div>
 
       <div class="submit-row">
-        <button class="btn primary" type="button" :disabled="!newFiles.length || submitting" @click="uploadNew">
+        <button class="btn--primary btn" type="button" :disabled="!newFiles.length || submitting" @click="uploadNew">
           {{ submitting ? 'Загружаем…' : `Загрузить (${newFiles.length})` }}
         </button>
         <button v-if="newFiles.length" class="btn ghost" type="button" @click="clearNew">Очистить выбор</button>
@@ -100,10 +100,10 @@
       </ul>
 
       <div class="submit-row" v-if="items.length">
-        <button class="btn primary" :disabled="!dirty || saving" @click="saveAll">
+        <button class="btn--primary btn" :disabled="!dirty || saving" @click="saveAll">
           {{ saving ? 'Сохраняем…' : 'Сохранить порядок и активность' }}
         </button>
-        <button class="btn ghost" :disabled="saving" @click="reload">Обновить список</button>
+        <button class="btn danger sm" :disabled="saving" @click="reload">Обновить список</button>
         <span v-if="!dirty" class="muted small">Нет изменений</span>
       </div>
     </div>
@@ -380,20 +380,7 @@ onMounted(reload)
 .hidden-input { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
 /* Кнопки */
-.btn {
-  position: relative;
-  display: inline-flex; align-items: center; justify-content: center;
-  height: 38px; padding: 0 14px; border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06);
-  color: #fff; cursor: pointer;
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-  transition: transform .15s ease, background .15s ease, border-color .15s ease;
-}
-.btn:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
-.btn.primary { background: linear-gradient(90deg,#ffb43a,#ff9900); border-color: transparent; color: #111; }
-.btn.ghost { background: rgba(255,255,255,0.04); }
-.btn.danger { background: rgba(255,70,70,0.18); border-color: rgba(255,70,70,0.4); color: #fff; }
-.btn.sm { height: 32px; padding: 0 10px; }
+
 
 .submit-row { margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 

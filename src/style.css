@@ -1,5 +1,83 @@
 :root {
-
   --accent-color: #ff9900;
 }
 
+.btn--primary {
+  background: var(--accent-color);
+  color: #111;
+  border: none;
+  height: 44px;
+  padding: 12px 20px;
+  text-decoration: none;
+}
+
+.btn--primary:hover {
+  background-color: #fff;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.btn--ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #eef1f6;
+  padding: 12px 20px;
+  border-radius: 12px;
+  margin-top: 20px;
+  text-decoration: none;
+}
+.btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn.danger {
+  background: rgba(255, 70, 70, 0.18);
+  border-color: rgba(255, 70, 70, 0.4);
+  color: #fff;
+}
+
+.btn.sm { height: 32px; padding: 0 10px; }
+
+.link {
+  font-size: 14px;
+  color: #c8cbd1;
+  text-decoration: none;
+  background-color: transparent;
+  border: none;
+}
+.link:hover {
+  color: #fff;
+}
+
+.cart__summary,
+.cart__list,
+.checkout__form,
+.summary {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 20px;
+  background: rgba(17, 17, 25, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.check__link {
+  color: var(--accent-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.check input[type="checkbox"],
+.consent .checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-color);
+}

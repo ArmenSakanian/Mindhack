@@ -3,11 +3,10 @@
     <div class="container">
       <!-- Левая: логотип -->
       <div class="left">
-  <a href="/" class="brand">
-    <img class="logo" :src="logoSrc" alt="Логотип" />
-  </a>
-</div>
-
+        <a href="/" class="brand">
+          <img class="logo" :src="logoSrc" alt="Логотип" />
+        </a>
+      </div>
 
       <!-- Центр: навигация (десктоп) -->
       <nav class="nav desktop" aria-label="Главная навигация">
@@ -39,12 +38,21 @@
           @click.prevent="goTo('feedback')"
           >Обратная связь</a
         >
+        <a
+          href="#faq"
+          class="link"
+          :class="{ active: active === 'faq' }"
+          @click.prevent="goTo('faq')"
+          >Часто задаваемые вопросы</a
+        >
       </nav>
 
       <!-- Правая: корзина + бургер -->
       <div class="right">
-        <a class="cart" aria-label="Корзина" href="/cart"><i class="fa-solid fa-cart-shopping"></i>
-          <span v-if="count > 0" class="badge">{{ count }}</span></a>
+        <router-link class="cart" aria-label="Корзина" to="/cart">
+          <i class="fa-solid fa-cart-shopping"></i>
+          <span v-if="count > 0" class="badge">{{ countLabel }}</span>
+        </router-link>
 
         <!-- Бургер справа -->
         <button
@@ -99,41 +107,60 @@
           @click.prevent="goToAndClose('feedback')"
           >Обратная связь</a
         >
+        <a
+          href="#faq"
+          class="mlink"
+          :class="{ active: active === 'faq' }"
+          @click.prevent="goToAndClose('faq')"
+          >Обратная связь</a
+        >
       </nav>
     </transition>
   </header>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import logoSrc from "@/assets/logo/logo.png";
 
-const STORAGE_KEY = "mh_cart_v1";
+const STORAGE_KEY = "cart:v1"; // тот же, что в Cart.vue
 const HEADER_H = 90;
 
 const count = ref(0);
+const countLabel = computed(() =>
+  count.value > 99 ? "99+" : String(count.value)
+);
+
 const active = ref("home");
 const mobileOpen = ref(false);
 const scrolled = ref(false);
 
-const SECTION_IDS = ["home", "catalog", "about", "feedback"];
+const SECTION_IDS = ["home", "catalog", "about", "feedback", "faq"];
 let sections = [];
 let mo; // MutationObserver
 let retryTimer; // для повторных попыток
 
-/* ----- корзина ----- */
+/* ===== Корзина ===== */
 function updateCount() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
     count.value = Array.isArray(raw)
-      ? raw.reduce((s, it) => s + (Number(it.qty) || 0), 0)
+      ? raw.reduce((s, it) => s + (Number(it?.qty) || 0), 0)
       : 0;
   } catch {
     count.value = 0;
   }
 }
 
-/* ----- меню: блокировка скролла и управление ----- */
+// именованные обработчики, чтобы их снять при размонтировании
+function onCartChange() {
+  updateCount();
+}
+function onStorage(e) {
+  if (e.key === STORAGE_KEY) updateCount();
+}
+
+/* ===== Меню: блокировка скролла и управление ===== */
 function lockBody(lock) {
   document.documentElement.style.overflow = lock ? "hidden" : "";
   document.body.style.overflow = lock ? "hidden" : "";
@@ -156,14 +183,14 @@ function onKeydown(e) {
   if (e.key === "Escape") closeMobile();
 }
 
-/* ----- якорный скролл ----- */
+/* ===== Якорный скролл ===== */
 function goTo(id) {
   const el = document.getElementById(id);
   if (!el) return;
   el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-/* ----- секции/активный пункт ----- */
+/* ===== Секции / активный пункт ===== */
 function setupAnchorsScrollMargin() {
   SECTION_IDS.forEach((id) => {
     const el = document.getElementById(id);
@@ -231,14 +258,19 @@ function updateActiveByScroll() {
   if (current) active.value = current.id;
 }
 
-/* ----- lifecycle ----- */
+// именованный resize-обработчик
+function onResize() {
+  collectSections();
+  setupAnchorsScrollMargin();
+  updateActiveByScroll();
+}
+
+/* ===== Lifecycle ===== */
 onMounted(() => {
   // корзина
   updateCount();
-  window.addEventListener("storage", (e) => {
-    if (e.key === STORAGE_KEY) updateCount();
-  });
-  window.addEventListener("mh:cart-updated", updateCount);
+  window.addEventListener("storage", onStorage);
+  window.addEventListener("cart:change", onCartChange);
 
   // секции
   ensureSectionsReady();
@@ -246,17 +278,16 @@ onMounted(() => {
 
   // события
   window.addEventListener("scroll", updateActiveByScroll, { passive: true });
-  window.addEventListener("resize", () => {
-    collectSections();
-    setupAnchorsScrollMargin();
-    updateActiveByScroll();
-  });
+  window.addEventListener("resize", onResize);
   window.addEventListener("keydown", onKeydown);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("scroll", updateActiveByScroll);
+  window.removeEventListener("resize", onResize);
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("storage", onStorage);
+  window.removeEventListener("cart:change", onCartChange);
   clearInterval(retryTimer);
   if (mo) mo.disconnect();
   lockBody(false);
@@ -449,7 +480,7 @@ onBeforeUnmount(() => {
   .burger {
     display: inline-flex;
     position: absolute;
-        right: 15px;
+    right: 15px;
   }
 }
 </style>

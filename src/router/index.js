@@ -13,7 +13,11 @@ import PrivacyPolicy from '@/pages/PrivacyPolicy.vue'
 import PublicOffer from '@/pages/PublicOffer.vue'
 import MarketingConsent from '@/pages/MarketingConsent.vue'
 
-// вверху можно не импортить, так как ты уже используешь динамические импорты через () => import()
+// Отключаем авто-восстановление скролла браузером
+if (typeof window !== 'undefined' && 'scrollRestoration' in history) {
+  history.scrollRestoration = 'manual'
+}
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -28,10 +32,10 @@ const router = createRouter({
 
     { path: '/category/:id(\\d+)', name: 'category', component: CategoryProducts, props: true },
     { path: '/category', name: 'categoryQuery', component: CategoryProducts },
-    { path: '/FaqAccordion', name: 'FaqAccordion', component: FaqAccordion},
-    { path: '/PrivacyPolicy', name: 'PrivacyPolicy', component: PrivacyPolicy},
-    { path: '/PublicOffer', name: 'PublicOffer', component: PublicOffer},
-    { path: '/MarketingConsent', name: 'MarketingConsent', component: MarketingConsent},
+    { path: '/FaqAccordion', name: 'FaqAccordion', component: FaqAccordion },
+    { path: '/PrivacyPolicy', name: 'PrivacyPolicy', component: PrivacyPolicy },
+    { path: '/PublicOffer', name: 'PublicOffer', component: PublicOffer },
+    { path: '/MarketingConsent', name: 'MarketingConsent', component: MarketingConsent },
 
     // Корзина
     { path: '/cart', name: 'cart', component: () => import('@/pages/CartPage.vue') },
@@ -39,14 +43,24 @@ const router = createRouter({
     // Оформление
     { path: '/checkout', name: 'checkout', component: () => import('@/pages/Checkout.vue') },
 
-    // НОВОЕ: страницы результата оплаты
+    // Результаты оплаты
     { path: '/success', name: 'paymentSuccess', component: () => import('@/pages/success.vue') },
     { path: '/fail', name: 'paymentFail', component: () => import('@/pages/fail.vue') },
   ],
+
+  // Управление скроллом
+  scrollBehavior(to, from /* , savedPosition */) {
+    // Если переход внутри той же страницы к якорю — плавный скролл
+    if (to.path === from.path && to.hash) {
+      return { el: to.hash, behavior: 'smooth', top: 0 }
+    }
+
+    // Любой другой переход (смена страницы) — всегда наверх, без восстановления позиции
+    return { left: 0, top: 0, behavior: 'auto' }
+  }
 })
 
-
-// гард как был
+// Гард авторизации
 router.beforeEach(async (to, from, next) => {
   if (!to.meta.requiresAuth) return next()
   try {

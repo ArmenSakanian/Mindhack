@@ -59,7 +59,7 @@
               <input type="checkbox" v-model="form.policy" required @blur="touch.policy = true" />
               <span>
                 Я согласен(на) с
-                <a href="/PrivacyPolicy" target="_blank">политикой конфиденциальности</a> <b class="req">*</b>
+                <a href="/PrivacyPolicy" class="check__link" target="_blank">политикой конфиденциальности</a> <b class="req">*</b>
               </span>
             </label>
             <p v-if="touch.policy && !form.policy" class="hint error">
@@ -73,14 +73,14 @@
               <input type="checkbox" v-model="form.marketing" />
               <span>
                 Согласен(на) на получение
-                <a href="/MarketingConsent" target="_blank">рекламных материалов</a>
+                <a href="/MarketingConsent" class="check__link" target="_blank">рекламных материалов</a>
               </span>
             </label>
           </div>
 
           <!-- ACTIONS -->
           <div class="actions span-2">
-            <button class="btn" type="submit" :disabled="!formValid || submitting">
+            <button class="btn--primary btn" type="submit" :disabled="!formValid || submitting">
               <span v-if="!submitting">Отправить</span>
               <span v-else>Отправка…</span>
             </button>
@@ -361,20 +361,8 @@ textarea:focus {
   font-size: 15px;
 }
 
-.consent .checkbox input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent-color);
-}
 
-.consent .checkbox a {
-  color: var(--accent-color);
-  text-decoration: underline;
-}
 
-.consent .checkbox a:hover {
-  text-decoration: none;
-}
 
 .consent .hint.error {
   margin-left: 28px;
@@ -477,20 +465,6 @@ textarea:focus {
   gap: 14px;
 }
 
-.btn {
-  padding: 14px 24px;
-  border-radius: 14px;
-  font-weight: 700;
-  font-size: 16px;
-  cursor: pointer;
-  background: var(--accent-color);
-  color: #fff;
-  border: none;
-}
-
-.btn:hover {
-  transform: translateY(-2px);
-}
 
 .btn:disabled {
   cursor: not-allowed;

@@ -153,7 +153,7 @@
                 <div class="actions">
                   <button
                     v-if="!inCart(p.id)"
-                    class="btn-primary"
+                    class="btn--primary btn"
                     @click="addToCart(p)"
                   >
                     <i class="fa-solid fa-cart-plus" aria-hidden="true"></i>
@@ -546,7 +546,7 @@ function removeFromCart(p: any) {
 
 /** Переход к оформлению */
 function goToCart() {
-  router.push("/checkout");
+  router.push("/cart");
 }
 
 /** Toast */
@@ -691,13 +691,10 @@ onBeforeUnmount(() => {
 
 /* Карточка */
 .product-card {
-  --card-bg: rgba(255, 255, 255, 0.06);
-  --card-bd: rgba(255, 255, 255, 0.1);
   display: grid;
   grid-template-columns: minmax(320px, 1fr) 1fr;
   align-items: stretch;
-  background: var(--card-bg);
-  border: 1px solid var(--card-bd);
+  background: #11111999;
   border-radius: 22px;
   overflow: hidden;
   min-height: 360px;
@@ -709,8 +706,7 @@ onBeforeUnmount(() => {
 }
 .product-card:hover {
   transform: translateY(-3px);
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.08);
+  background: #00000099;
   box-shadow: 0 18px 56px rgba(0, 0, 0, 0.34);
 }
 
@@ -972,33 +968,21 @@ onBeforeUnmount(() => {
   gap: 10px;
   flex-wrap: wrap;
 }
-.btn-primary,
+
 .btn-outline,
 .btn-ghost {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 18px;
-  border-radius: 14px;
+  padding: 12px 20px;
+  border-radius: 12px;
   font-weight: 800;
-  font-size: 16px;
-}
-.btn-primary {
-  border: none;
-  background: var(--accent-color);
-  color: #1b1230;
-  transition: transform 0.18s ease, background 0.2s ease, box-shadow 0.2s ease;
-}
-.btn-primary:hover {
-  transform: translateY(-1px);
-  background: #ffae33;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
 }
 
 .btn-outline {
   border: 2px solid var(--accent-color);
   background: transparent;
-  color: #ffcc80;
+  color: var(--accent-color);
   transition: transform 0.18s ease, background 0.2s ease, border-color 0.2s ease;
 }
 .btn-outline:hover {
@@ -1013,7 +997,7 @@ onBeforeUnmount(() => {
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.06);
-  color: #ffd2a3;
+  color: #941b0c;
   transition: transform 0.18s ease, background 0.2s ease, border-color 0.2s ease,
     color 0.2s ease;
 }

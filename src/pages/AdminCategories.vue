@@ -13,14 +13,14 @@
         <div class="form-actions">
           <button
             v-if="mode === 'create'"
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="resetForm()"
           >Закрыть</button>
 
           <button
             v-else
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="cancelEdit"
           >Отмена</button>
@@ -107,7 +107,7 @@
             />
             <button
               type="button"
-              class="btn"
+              class="btn--primary btn"
               @click="addKeyword"
               :disabled="keywordInput.length === 0 || form.keywords.length >= KW_MAX"
               title="Добавить ключевое слово"
@@ -150,7 +150,7 @@
         <div class="submit-row">
           <button
             v-if="mode === 'create'"
-            class="btn primary"
+            class="btn--primary btn"
             type="submit"
             :disabled="!isFormValid || submitting"
           >
@@ -159,7 +159,7 @@
 
           <button
             v-else
-            class="btn primary"
+            class="btn--primary btn"
             type="submit"
             :disabled="!isFormValid || !isDirty || submitting"
             title="Сохранить изменения"
@@ -169,14 +169,14 @@
 
           <button
             v-if="mode === 'create'"
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="resetForm()"
           >Закрыть</button>
 
           <button
             v-else
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="cancelEdit"
           >Закрыть</button>
@@ -686,22 +686,7 @@ textarea.invalid {
   margin-top: 16px;
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.btn {
-  background: rgba(20, 24, 39, .85);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 10px 14px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: transform .1s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
-  font-weight: 700;
-  letter-spacing: .2px;
-}
-.btn:hover { transform: translateY(-1px); border-color: #3b3f5c; box-shadow: 0 8px 26px rgba(0,0,0,.3); }
-.btn.primary { background: var(--primary); border-color: transparent; color: white; }
-.btn.primary:hover { background: var(--primary-600); }
-.btn.ghost { background: transparent; }
-.btn:disabled { opacity: .55; cursor: not-allowed; }
+
 
 /* ===== Список ===== */
 .list-card .list-head {

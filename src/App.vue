@@ -24,12 +24,15 @@ main {
   min-height: 100vh;
 }
 
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
-  font-family: "Noto Serif Display", serif;
+font-family: "Rubik", sans-serif;
+  font-optical-sizing: auto;
+  font-style: normal;
   background: #222222;
   display: flex;
   flex-direction: column;

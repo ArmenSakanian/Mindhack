@@ -13,14 +13,14 @@
         <div class="form-actions">
           <button
             v-if="mode === 'create'"
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="resetForm"
           >Закрыть</button>
 
           <button
             v-else
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="cancelEdit"
           >Отмена</button>
@@ -62,7 +62,7 @@
         <div class="submit-row">
           <button
             v-if="mode === 'create'"
-            class="btn primary"
+            class="btn--primary btn"
             type="submit"
             :disabled="!isFormValid || submitting"
           >
@@ -80,14 +80,14 @@
 
           <button
             v-if="mode === 'create'"
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="resetForm"
           >Закрыть</button>
 
           <button
             v-else
-            class="btn ghost"
+            class="btn danger sm"
             type="button"
             @click="cancelEdit"
           >Закрыть</button>
@@ -162,7 +162,7 @@
         <button class="btn primary" :disabled="savingOrder" @click="saveOrder">
           {{ savingOrder ? 'Сохраняем порядок…' : 'Сохранить порядок' }}
         </button>
-        <button class="btn ghost" :disabled="savingOrder" @click="discardOrder">Отменить перестановку</button>
+        <button class="btn danger sm" :disabled="savingOrder" @click="discardOrder">Отменить перестановку</button>
       </div>
     </div>
 
@@ -492,8 +492,8 @@ onMounted(fetchList)
     radial-gradient(800px 400px at 90% 10%, rgba(135,77,255,.1), transparent 55%),
     linear-gradient(160deg, #0f0b1a, #1b1230 45%, #2a1545 70%, #35185a);
   color: var(--text);
-  padding: 24px;
   min-height: 100vh;
+    padding: 120px 25px;
 }
 
 .page-head h1 {
@@ -563,22 +563,7 @@ textarea.invalid {
   margin-top: 16px;
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.btn {
-  background: rgba(20, 24, 39, .85);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 10px 14px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: transform .1s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
-  font-weight: 700;
-  letter-spacing: .2px;
-}
-.btn:hover { transform: translateY(-1px); border-color: #3b3f5c; box-shadow: 0 8px 26px rgba(0,0,0,.3); }
-.btn.primary { background: var(--primary); border-color: transparent; color: white; }
-.btn.primary:hover { background: var(--primary-600); }
-.btn.ghost { background: transparent; }
-.btn:disabled { opacity: .55; cursor: not-allowed; }
+
 
 /* ===== Список ===== */
 .list-head {
