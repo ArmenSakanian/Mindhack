@@ -49,15 +49,20 @@ const router = createRouter({
   ],
 
   // Управление скроллом
-  scrollBehavior(to, from /* , savedPosition */) {
-    // Если переход внутри той же страницы к якорю — плавный скролл
-    if (to.path === from.path && to.hash) {
-      return { el: to.hash, behavior: 'smooth', top: 0 }
+  // Управление скроллом
+scrollBehavior(to, from /* , savedPosition */) {
+  if (to.hash) {
+    return {
+      el: to.hash,
+      top: 90,            // учёт фиксированного хедера
+      behavior: 'smooth'
     }
-
-    // Любой другой переход (смена страницы) — всегда наверх, без восстановления позиции
-    return { left: 0, top: 0, behavior: 'auto' }
   }
+
+  // Любой другой переход (без хэша) — всегда вверх
+  return { left: 0, top: 0, behavior: 'auto' }
+}
+
 })
 
 // Гард авторизации

@@ -27,7 +27,10 @@ $eyebrow     = trim((string)($_POST['eyebrow'] ?? ''));
 $title       = trim((string)($_POST['title'] ?? ''));
 $tagline     = trim((string)($_POST['tagline'] ?? ''));
 $link_url    = trim((string)($_POST['link_url'] ?? ''));
-$priceRaw    = $_POST['price'] ?? null;
+
+// цены
+$priceRaw      = $_POST['price'] ?? null;       // со скидкой (обяз)
+$priceOldRaw   = $_POST['price_old'] ?? null;   // без скидки (опц)
 
 /** features: JSON или массив */
 $features = [];
@@ -65,14 +68,35 @@ if (count($features) < 1) $errors[] = 'Нужно минимум 1 пункт п
 /** link_url: обязателен и должен быть http/https */
 if ($link_url === '') {
   $errors[] = 'Поле ссылки не может быть пустым.';
+} else {
+  // простая проверка схемы
+  if (!preg_match('~^https?://~i', $link_url)) {
+    $errors[] = 'Ссылка должна начинаться с http:// или https://';
+  }
 }
-/** price */
+
+/** price (со скидкой, обязательна) */
 $price = null;
 if ($priceRaw === null || $priceRaw === '' || !is_numeric($priceRaw)) {
-  $errors[] = 'Введите корректную цену.';
+  $errors[] = 'Введите корректную цену со скидкой.';
 } else {
   $price = (float)$priceRaw;
-  if ($price <= 0) $errors[] = 'Цена должна быть больше 0.';
+  if ($price <= 0) $errors[] = 'Цена со скидкой должна быть больше 0.';
+}
+
+/** price_old (без скидки, опционально) */
+$price_old = null;
+if ($priceOldRaw !== null && $priceOldRaw !== '') {
+  if (!is_numeric($priceOldRaw)) {
+    $errors[] = 'Старая цена указана некорректно.';
+  } else {
+    $price_old = (float)$priceOldRaw;
+    if ($price_old <= 0) {
+      $errors[] = 'Старая цена должна быть больше 0, либо пустой.';
+    } elseif ($price !== null && $price > 0 && $price_old < $price) {
+      $errors[] = 'Старая цена не может быть меньше цены со скидкой.';
+    }
+  }
 }
 
 /** ====== Файлы (images[]) ====== */
@@ -173,10 +197,11 @@ foreach ($filesPayload as $i => $file) {
 try {
   $pdo->beginTransaction();
 
+  // ВАЖНО: в таблице products должно быть поле price_old (DECIMAL(10,2) NULL или INT NULL)
   $sql = "INSERT INTO products
-            (category_id, category_title, eyebrow, title, tagline, link_url, features, price, image)
+            (category_id, category_title, eyebrow, title, tagline, link_url, features, price_old, price, image)
           VALUES
-            (:category_id, :category_title, :eyebrow, :title, :tagline, :link_url, :features, :price, :image)";
+            (:category_id, :category_title, :eyebrow, :title, :tagline, :link_url, :features, :price_old, :price, :image)";
   $stmt = $pdo->prepare($sql);
   $stmt->execute([
     ':category_id'    => $category_id,
@@ -186,7 +211,8 @@ try {
     ':tagline'        => $tagline,
     ':link_url'       => $link_url,
     ':features'       => json_encode($features, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES),
-    ':price'          => $price,
+    ':price_old'      => $price_old,   // может быть null
+    ':price'          => $price,       // со скидкой
     ':image'          => $savedUrls[0] ?? ''  // legacy
   ]);
 
@@ -217,6 +243,7 @@ try {
       'tagline'         => $tagline,
       'link_url'        => $link_url,
       'features'        => $features,
+      'price_old'       => $price_old, // <--- добавили в ответ
       'price'           => $price,
       'image'           => $savedUrls[0] ?? '',
       'images'          => array_map(function($url, $i){

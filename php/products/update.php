@@ -18,6 +18,9 @@ if (!in_array($method, ['POST','PUT','PATCH'], true)) {
 require_once __DIR__ . '/../db.php';
 $pdo = db();
 
+// ===== DEBUG =====
+$DEBUG = false; // ← поставь true, чтобы временно видеть текст ошибки
+
 /** ========= Параметры изображений ========= */
 const IMAGE_MAX_BYTES   = 5 * 1024 * 1024; // 5MB
 const IMAGES_MAX_COUNT  = 10;              // разумный лимит на продукт
@@ -52,7 +55,10 @@ $eyebrow     = trim((string)($payload['eyebrow'] ?? ''));
 $title       = trim((string)($payload['title'] ?? ''));
 $tagline     = trim((string)($payload['tagline'] ?? ''));
 $link_url    = trim((string)($payload['link_url'] ?? ''));
-$priceRaw    = $payload['price'] ?? null;
+
+// Цены
+$priceRaw     = $payload['price'] ?? null;       // со скидкой (обяз)
+$priceOldRaw  = $payload['price_old'] ?? null;   // без скидки (опц., можно очистить)
 
 /** features: JSON или массив */
 $features = [];
@@ -102,7 +108,7 @@ if (isset($payload['primary_id'])) {
   $primaryId = (int)$payload['primary_id'];
 }
 
-/** ========= Валидация текста ========= */
+/** ========= Валидация текста/поля ========= */
 $errors=[];
 if ($id < 1)          $errors[]='Некорректный id.';
 if ($category_id < 1) $errors[]='Выберите категорию.';
@@ -114,14 +120,38 @@ if (count($features) < 1) $errors[]='Нужно минимум 1 пункт.';
 /** link_url обязателен и http/https */
 if ($link_url === '') {
   $errors[] = 'Поле ссылки не может быть пустым.';
+} else {
+  if (!preg_match('~^https?://~i', $link_url)) {
+    $errors[] = 'Ссылка должна начинаться с http:// или https://';
+  }
 }
 
-/** price */
+/** price (со скидкой) — обязательна */
 $price=null;
 if ($priceRaw===null || $priceRaw==='' || !is_numeric($priceRaw)) {
-  $errors[]='Введите корректную цену.';
+  $errors[]='Введите корректную цену со скидкой.';
 } else {
-  $price=(float)$priceRaw; if ($price<=0) $errors[]='Цена должна быть больше 0.';
+  $price=(float)$priceRaw; if ($price<=0) $errors[]='Цена со скидкой должна быть больше 0.';
+}
+
+/** price_old (без скидки) — опциональна, но если указана, то >0 и >= price */
+$price_old = null;
+if ($priceOldRaw !== null) {
+  // Пришло поле: либо пустая строка (очистить), либо число
+  if ($priceOldRaw === '') {
+    $price_old = null; // очистка
+  } else {
+    if (!is_numeric($priceOldRaw)) {
+      $errors[] = 'Старая цена указана некорректно.';
+    } else {
+      $price_old = (float)$priceOldRaw;
+      if ($price_old <= 0) {
+        $errors[] = 'Старая цена должна быть больше 0, либо пустой.';
+      } elseif ($price !== null && $price > 0 && $price_old < $price) {
+        $errors[] = 'Старая цена не может быть меньше цены со скидкой.';
+      }
+    }
+  }
 }
 
 /** ========= Новые изображения из формы ========= */
@@ -270,20 +300,28 @@ try {
             tagline = :tagline,
             link_url = :link_url,
             features = :features,
+            price_old = :price_old,
             price = :price
           WHERE id = :id LIMIT 1";
   $stmt = $pdo->prepare($sql);
-  $stmt->execute([
-    ':cid'      => $category_id,
-    ':ctitle'   => $catTitle,
-    ':eyebrow'  => $eyebrow,
-    ':title'    => $title,
-    ':tagline'  => $tagline,
-    ':link_url' => $link_url,
-    ':features' => json_encode($features, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-    ':price'    => $price,
-    ':id'       => $id
-  ]);
+
+  // NB: чтобы корректно писать NULL, используем bindValue с PDO::PARAM_NULL при необходимости
+  if ($price_old === null) {
+    $stmt->bindValue(':price_old', null, PDO::PARAM_NULL);
+  } else {
+    $stmt->bindValue(':price_old', $price_old);
+  }
+
+  $stmt->bindValue(':cid',      $category_id, PDO::PARAM_INT);
+  $stmt->bindValue(':ctitle',   $catTitle);
+  $stmt->bindValue(':eyebrow',  $eyebrow);
+  $stmt->bindValue(':title',    $title);
+  $stmt->bindValue(':tagline',  $tagline);
+  $stmt->bindValue(':link_url', $link_url);
+  $stmt->bindValue(':features', json_encode($features, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+  $stmt->bindValue(':price',    $price);
+  $stmt->bindValue(':id',       $id, PDO::PARAM_INT);
+  $stmt->execute();
 
   // 2) Удаляем отмеченные изображения
   $deletedFilesAbs = [];
@@ -370,7 +408,7 @@ try {
   // Физически удалим файлы, помеченные к удалению
   foreach ($deletedFilesAbs as $abs) { @unlink($abs); }
 
-  // Галерея для ответа (+ url_full)
+  // 7) Отдаём галерею (+ url_full)
   $imgsStmt = $pdo->prepare("SELECT id, url, alt, sort, is_primary FROM product_images WHERE product_id=:pid ORDER BY is_primary DESC, sort ASC, id ASC");
   $imgsStmt->execute([':pid'=>$id]);
   $images = array_map(function($r) use ($baseUrl){
@@ -378,11 +416,11 @@ try {
     $url_full = $url;
     if ($url && $baseUrl && strpos($url, 'http') !== 0) {
       $rel = $url[0] === '/' ? $url : ('/' . $url);
-      $url_full = $baseUrl . $rel;
+      $url_full = $baseUrl . $rel; // <-- ВАЖНО: точка, не плюс
     }
     return [
       'id'         => (int)$r['id'],
-      'url'        => (string)$r['url'],
+      'url'        => $url,
       'url_full'   => $url_full,
       'alt'        => $r['alt'] ?? null,
       'sort'       => (int)$r['sort'],
@@ -403,6 +441,7 @@ try {
       'tagline'        => $tagline,
       'link_url'       => $link_url,
       'features'       => $features,
+      'price_old'      => $price_old,
       'price'          => $price,
       'image'          => $coverUrl,
       'images'         => $images
@@ -414,6 +453,9 @@ try {
   // Откат новых сохранённых файлов
   foreach ($savedFilesAbs as $p) { @unlink($p); }
   http_response_code(500);
-  echo json_encode(['ok'=>false,'message'=>'Ошибка при обновлении продукта.'], JSON_UNESCAPED_UNICODE);
+  echo json_encode([
+    'ok'=>false,
+    'message'=>$DEBUG ? ('Ошибка при обновлении продукта: ' . $e->getMessage()) : 'Ошибка при обновлении продукта.'
+  ], JSON_UNESCAPED_UNICODE);
   exit;
 }

@@ -1,26 +1,4 @@
 <?php
-/**
- * /php/categories/update.php
- * Обновление категории по id.
- *
- * Методы:
- *  - POST (multipart/form-data) — для обновлений с возможной заменой изображения
- *  - PUT/PATCH (application/json) — для обновлений без изображения
- *
- * Поля:
- *  - id (int, required)
- *  - title (string, required)
- *  - subtitle (string, required)
- *  - description (string, required)
- *  - price (number > 0, required)
- *  - keywords (JSON string) ИЛИ keywords[] (array), 1..4
- *  - image (file, optional) — PNG/JPG/WEBP до 5 МБ; если передан — заменить
- *
- * Ответы:
- *  - { ok: true, updated: 1, id, image_replaced: bool, category: {...} }
- *  - { ok: false, message: '...' }
- */
-
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
@@ -30,20 +8,13 @@ $pdo = db();
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 $acceptedMime = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
 
-/* ---------- 0) Хелперы пути проекта/загрузок ---------- */
-$phpDir      = __DIR__;                  // /php/categories
-$projectRoot = dirname($phpDir, 2);      // корень сайта
+$projectRoot = dirname(__DIR__, 2);
 $uploadsDir  = $projectRoot . '/uploads/categories';
+if (!is_dir($uploadsDir)) { @mkdir($uploadsDir, 0775, true); }
 
-if (!is_dir($uploadsDir)) {
-    @mkdir($uploadsDir, 0775, true);
-}
-
-/* ---------- 1) Чтение запроса ---------- */
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-
 $payload = [];
-$files = [];
+$files   = [];
 
 if ($method === 'POST') {
     $payload = $_POST;
@@ -60,87 +31,26 @@ if ($method === 'POST') {
     exit;
 }
 
-/* ---------- 2) Извлечение и нормализация полей ---------- */
+/** Извлечение полей */
 $id           = isset($payload['id']) ? (int)$payload['id'] : 0;
-$title        = trim((string)($payload['title'] ?? ''));
-$subtitle     = trim((string)($payload['subtitle'] ?? ''));
-$description  = trim((string)($payload['description'] ?? ''));
-$priceRaw     = $payload['price'] ?? null;
+$comingSoon   = isset($payload['coming_soon']) && (string)$payload['coming_soon'] === '1' ? 1 : 0;
 
-$keywords = [];
-if (array_key_exists('keywords', $payload)) {
-    $kw = $payload['keywords'];
-    if (is_string($kw)) {
-        $decoded = json_decode($kw, true);
-        if (is_array($decoded)) $keywords = $decoded;
-    } elseif (is_array($kw)) {
-        $keywords = $kw;
-    }
-} else {
-    // альтернативный формат keywords[]
-    // если пришёл через multipart, PHP сам соберёт в $payload['keywords'] при name="keywords[]"
-}
+$titleRaw       = $payload['title'] ?? null;
+$subtitleRaw    = $payload['subtitle'] ?? null;
+$descriptionRaw = $payload['description'] ?? null;
+$priceRaw       = $payload['price'] ?? null;
 
-$keywords = array_values(array_filter(array_map(function ($v) {
-    $v = trim((string)$v);
-    $v = preg_replace('/\s{2,}/u', ' ', $v);
-    return $v;
-}, $keywords), fn($v) => $v !== ''));
+$hasNewImage = ($method === 'POST' && isset($files['image']) && is_uploaded_file($files['image']['tmp_name']) && $files['image']['error'] === UPLOAD_ERR_OK);
 
-// Убираем дубликаты без учёта регистра
-$tmp = []; $dedup = [];
-foreach ($keywords as $kw) {
-    $low = mb_strtolower($kw, 'UTF-8');
-    if (isset($tmp[$low])) continue;
-    $tmp[$low] = true; $dedup[] = $kw;
-}
-$keywords = $dedup;
-
-/* ---------- 3) Валидация ---------- */
-$errors = [];
-if ($id < 1)               $errors[] = 'Некорректный id.';
-if ($title === '')         $errors[] = 'Заполните заголовок.';
-if ($subtitle === '')      $errors[] = 'Заполните подзаголовок.';
-if ($description === '')   $errors[] = 'Заполните описание.';
-
-$price = null;
-if ($priceRaw === null || $priceRaw === '' || !is_numeric($priceRaw)) {
-    $errors[] = 'Введите корректную цену.';
-} else {
-    $price = (float)$priceRaw;
-    if ($price <= 0) $errors[] = 'Цена должна быть больше 0.';
-}
-
-if (count($keywords) < 1 || count($keywords) > 4) {
-    $errors[] = 'Нужно от 1 до 4 ключевых слов.';
-}
-
-$hasNewImage = false;
-if ($method === 'POST' && isset($files['image']) && is_uploaded_file($files['image']['tmp_name'])) {
-    $file = $files['image'];
-    if ($file['error'] !== UPLOAD_ERR_OK) {
-        $errors[] = 'Ошибка загрузки изображения.';
-    } else {
-        $mime = mime_content_type($file['tmp_name']);
-        if (!isset($acceptedMime[$mime])) {
-            $errors[] = 'Недопустимый формат изображения. Разрешены PNG/JPG/WEBP.';
-        }
-        if ($file['size'] > IMAGE_MAX_BYTES) {
-            $errors[] = 'Файл слишком большой (до 5 МБ).';
-        }
-        $hasNewImage = empty($errors);
-    }
-}
-
-if (!empty($errors)) {
+/** Текущая запись */
+if ($id < 1) {
     http_response_code(422);
-    echo json_encode(['ok' => false, 'message' => implode(' ', $errors)], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => false, 'message' => 'Некорректный id.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-/* ---------- 4) Получить текущую запись ---------- */
 try {
-    $stmt = $pdo->prepare("SELECT id, title, subtitle, description, price, keywords, image FROM categories WHERE id = :id LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, coming_soon, title, subtitle, description, price, keywords, image FROM categories WHERE id = :id LIMIT 1");
     $stmt->execute([':id' => $id]);
     $current = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$current) {
@@ -154,36 +64,103 @@ try {
     exit;
 }
 
-/* ---------- 5) Сравнение (есть ли изменения) ---------- */
 $currentKeywords = [];
 if (!empty($current['keywords'])) {
     $decoded = json_decode($current['keywords'], true);
     if (is_array($decoded)) $currentKeywords = $decoded;
 }
+$oldImageRelPath = (string)($current['image'] ?? '');
 
-$noDataChange =
-    $title       === (string)$current['title'] &&
-    $subtitle    === (string)$current['subtitle'] &&
-    $description === (string)$current['description'] &&
-    (float)$price === (float)$current['price'] &&
-    json_encode(array_values($keywords), JSON_UNESCAPED_UNICODE) === json_encode(array_values($currentKeywords), JSON_UNESCAPED_UNICODE);
+/** Нормализация входящих, с возможностью очистки текстовых полей */
+$title       = is_null($titleRaw)       ? (string)$current['title']       : trim((string)$titleRaw);
+$subtitle    = is_null($subtitleRaw)    ? $current['subtitle']            : trim((string)$subtitleRaw);
+$description = is_null($descriptionRaw) ? $current['description']         : trim((string)$descriptionRaw);
 
-if ($noDataChange && !$hasNewImage) {
-    // Ничего не меняли
-    echo json_encode(['ok' => false, 'message' => 'Вы ничего не меняли. Сохранять нечего.'], JSON_UNESCAPED_UNICODE);
+/** Пустая строка => NULL */
+$subtitle    = ($subtitle === '')    ? null : $subtitle;
+$description = ($description === '') ? null : $description;
+
+/** price */
+if (is_null($priceRaw) || $priceRaw === '') {
+    $price = null; // явная очистка
+} else {
+    if (!is_numeric($priceRaw)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => 'Цена: некорректное значение.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $price = (float)$priceRaw;
+    if ($price <= 0) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => 'Цена должна быть больше 0.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
+
+/** keywords */
+$keywords = null;
+if (array_key_exists('keywords', $payload)) {
+    $kw = $payload['keywords'];
+    $arr = [];
+    if (is_string($kw)) {
+        $decoded = json_decode($kw, true);
+        if (is_array($decoded)) $arr = $decoded;
+    } elseif (is_array($kw)) {
+        $arr = $kw;
+    }
+    $arr = array_values(array_filter(array_map(function ($v) {
+        $v = trim((string)$v);
+        $v = preg_replace('/\s{2,}/u', ' ', $v);
+        return $v;
+    }, $arr), fn($v) => $v !== ''));
+
+    // дедуп
+    $tmp = []; $dedup = [];
+    foreach ($arr as $k) {
+        $low = mb_strtolower($k, 'UTF-8');
+        if (isset($tmp[$low])) continue;
+        $tmp[$low] = true; $dedup[] = $k;
+    }
+    if (count($dedup) > 4) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => 'Слишком много ключевых слов (максимум 4).'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $keywords = (!empty($dedup) ? $dedup : null); // пусто => NULL (очистка)
+} else {
+    $keywords = $currentKeywords; // поле не прислано — оставим как есть
+}
+
+/** Валидация: обязателен только title */
+if ($title === '') {
+    http_response_code(422);
+    echo json_encode(['ok' => false, 'message' => 'Заполните заголовок.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-/* ---------- 6) Если есть новая картинка — сохранить, старую удалить после успешного UPDATE ---------- */
-$newImageRelPath = null;
-$oldImageRelPath = (string)($current['image'] ?? '');
+/** Новая картинка — валидация */
+if ($hasNewImage) {
+    $file = $files['image'];
+    $mime = mime_content_type($file['tmp_name']);
+    if (!isset($acceptedMime[$mime])) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => 'Недопустимый формат изображения. Разрешены PNG/JPG/WEBP.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($file['size'] > IMAGE_MAX_BYTES) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'message' => 'Файл слишком большой (до 5 МБ).'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
 
+/** Если загружена новая картинка — сохраняем (старую удалим после UPDATE) */
+$newImageRelPath = null;
 if ($hasNewImage) {
     $file = $files['image'];
     $mime = mime_content_type($file['tmp_name']);
     $ext  = $acceptedMime[$mime] ?? 'bin';
-    $base = bin2hex(random_bytes(6)) . '-' . time();
-    $name = $base . '.' . $ext;
+    $name = bin2hex(random_bytes(6)) . '-' . time() . '.' . $ext;
 
     $dest = rtrim($uploadsDir, '/\\') . DIRECTORY_SEPARATOR . $name;
     if (!move_uploaded_file($file['tmp_name'], $dest)) {
@@ -194,47 +171,71 @@ if ($hasNewImage) {
     $newImageRelPath = '/uploads/categories/' . $name;
 }
 
-/* ---------- 7) Обновление записи ---------- */
-try {
-    $sql = "UPDATE categories
-            SET title = :title,
-                subtitle = :subtitle,
-                description = :description,
-                price = :price,
-                keywords = :keywords"
-            . ($hasNewImage ? ", image = :image" : "") .
-           " WHERE id = :id LIMIT 1";
+/** Собираем целевые значения */
+$targetComingSoon  = (int)$comingSoon;
+$targetTitle       = $title;
+$targetSubtitle    = $subtitle;
+$targetDescription = $description;
+$targetPrice       = $price;               // число или NULL
+$targetKeywordsArr = $keywords ?? null;    // массив или NULL
+$targetKeywordsJson= !empty($targetKeywordsArr) ? json_encode($targetKeywordsArr, JSON_UNESCAPED_UNICODE) : null;
 
+/** Проверка «нет изменений» (картинку учитываем только при наличии новой) */
+$noDataChange =
+    $targetComingSoon  === (int)($current['coming_soon'] ?? 0) &&
+    $targetTitle       === (string)$current['title'] &&
+    $targetSubtitle    === ($current['subtitle'] ?? null) &&
+    $targetDescription === ($current['description'] ?? null) &&
+    (float)($targetPrice ?? 0) === (float)($current['price'] ?? 0) &&
+    (($targetKeywordsJson ?? 'null') === (is_null($current['keywords']) ? 'null' : json_encode($currentKeywords, JSON_UNESCAPED_UNICODE)));
+
+if ($noDataChange && !$hasNewImage) {
+    echo json_encode(['ok' => false, 'message' => 'Вы ничего не меняли. Сохранять нечего.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/** UPDATE */
+try {
+    $set = "coming_soon = :coming_soon,
+            title       = :title,
+            subtitle    = :subtitle,
+            description = :description,
+            price       = :price,
+            keywords    = :keywords";
+
+    if ($hasNewImage) {
+        $set .= ", image = :image";
+    }
+
+    $sql = "UPDATE categories
+            SET $set, updated_at = NOW()
+            WHERE id = :id
+            LIMIT 1";
     $stmt = $pdo->prepare($sql);
     $params = [
-        ':title'       => $title,
-        ':subtitle'    => $subtitle,
-        ':description' => $description,
-        ':price'       => $price,
-        ':keywords'    => json_encode($keywords, JSON_UNESCAPED_UNICODE),
+        ':coming_soon' => $targetComingSoon,
+        ':title'       => $targetTitle,
+        ':subtitle'    => $targetSubtitle,
+        ':description' => $targetDescription,
+        ':price'       => $targetPrice,
+        ':keywords'    => $targetKeywordsJson,
         ':id'          => $id,
     ];
     if ($hasNewImage) {
         $params[':image'] = $newImageRelPath;
     }
-
     $stmt->execute($params);
-    $updated = $stmt->rowCount(); // может быть 0, если изменились только поля, равные прежним (мы уже проверили выше)
 
-    // Если было новое изображение — удалим старое
+    /** Если заменили изображение — удаляем старый файл */
     $imageReplaced = false;
-    if ($hasNewImage) {
+    if ($hasNewImage && $oldImageRelPath) {
         $imageReplaced = true;
-        if ($oldImageRelPath) {
-            $rel = $oldImageRelPath[0] === '/' ? substr($oldImageRelPath, 1) : $oldImageRelPath;
-            $abs = $projectRoot . DIRECTORY_SEPARATOR . $rel;
-
-            $uploadsReal = realpath($uploadsDir);
-            $absReal = (file_exists($abs)) ? realpath($abs) : null;
-
-            if ($uploadsReal && $absReal && str_starts_with($absReal, $uploadsReal)) {
-                @unlink($absReal);
-            }
+        $rel = ltrim($oldImageRelPath, '/');
+        $abs = $projectRoot . DIRECTORY_SEPARATOR . $rel;
+        $uploadsReal = realpath($uploadsDir);
+        $absReal     = (is_file($abs) ? realpath($abs) : null);
+        if ($uploadsReal && $absReal && str_starts_with($absReal, $uploadsReal)) {
+            @unlink($absReal);
         }
     }
 
@@ -244,20 +245,22 @@ try {
         'id' => $id,
         'image_replaced' => $imageReplaced,
         'category' => [
-            'id'          => $id,
-            'title'       => $title,
-            'subtitle'    => $subtitle,
-            'description' => $description,
-            'price'       => $price,
-            'keywords'    => $keywords,
-            'image'       => $hasNewImage ? $newImageRelPath : $oldImageRelPath,
+            'id'           => $id,
+            'coming_soon'  => (bool)$targetComingSoon,
+            'title'        => $targetTitle,
+            'subtitle'     => $targetSubtitle,
+            'description'  => $targetDescription,
+            'price'        => $targetPrice,
+            'keywords'     => $targetKeywordsArr ?? [],
+            'image'        => $hasNewImage ? $newImageRelPath : $oldImageRelPath,
         ]
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    // Откат нового файла, если он был сохранён
-    if ($hasNewImage && isset($dest) && file_exists($dest)) {
-        @unlink($dest);
+    if ($newImageRelPath) {
+        $rel = ltrim($newImageRelPath, '/');
+        $abs = $projectRoot . DIRECTORY_SEPARATOR . $rel;
+        if (is_file($abs)) @unlink($abs);
     }
     http_response_code(500);
     echo json_encode(['ok' => false, 'message' => 'Ошибка БД при обновлении категории.'], JSON_UNESCAPED_UNICODE);

@@ -5,84 +5,95 @@
       <header class="head">
         <h2>Каталог MindHack</h2>
         <p>
-          Готовые таблицы и мини-системы, которые экономят время и деньги.
-          Выберите направление — внутри наборы, пресеты и шаблоны с
-          автографиками и готовыми отчётами.
+          Наши продукты созданы для того, чтобы повысить эффективность твоих
+          рутинных задач, а также сэкономить твое время и деньги. Выбери сферу и
+          подбери готовое решение!
         </p>
       </header>
 
       <!-- Сетка категорий -->
-      <!-- Сетка категорий -->
-<div class="row">
-  <article
-    data-aos="fade-up"
-    v-for="cat in categories"
-    :key="cat.id"
-    class="panel"
-    role="button"
-    tabindex="0"
-    @click="goToCategory(cat.id)"
-    @keypress.enter="goToCategory(cat.id)"
-  >
-    <!-- Медиа -->
-    <div class="media">
-      <img :src="cat.image" :alt="cat.title" loading="lazy" />
-      <div class="badge" v-if="cat.icon">
-        <i :class="cat.icon" aria-hidden="true"></i>
+      <div class="row">
+        <article
+          data-aos="fade-up"
+          v-for="cat in categories"
+          :key="cat.id"
+          class="panel"
+          role="button"
+          tabindex="0"
+          @click="goToCategory(cat.id)"
+          @keypress.enter="goToCategory(cat.id)"
+        >
+          <!-- Медиа -->
+          <div class="media">
+            <img :src="cat.image" :alt="cat.title" loading="lazy" />
+
+            <!-- Иконка -->
+            <div class="badge" v-if="cat.icon">
+              <i :class="cat.icon" aria-hidden="true"></i>
+            </div>
+
+            <!-- НОВОЕ: красный бейдж -->
+            <div
+              v-if="cat.comingSoon"
+              class="soon-badge"
+              :aria-label="badgeText"
+              :title="badgeText"
+            >
+              {{ badgeText }}
+            </div>
+          </div>
+
+          <!-- Контент -->
+          <div class="body">
+            <div class="eyebrow" v-if="cat.eyebrow">{{ cat.eyebrow }}</div>
+            <h3 class="title">{{ cat.title }}</h3>
+            <p class="tagline" v-if="cat.tagline">{{ cat.tagline }}</p>
+
+            <ul class="perks" v-if="cat.perks?.length">
+              <li v-for="perk in cat.perks" :key="perk">
+                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                {{ perk }}
+              </li>
+            </ul>
+
+            <div class="meta" v-if="cat.price">
+              <div class="price">
+                <span class="price_text">от </span>
+                {{ formatPrice(cat.price) }}
+              </div>
+            </div>
+
+            <!-- Кнопка -->
+            <div class="actions">
+              <a
+                class="btn--primary btn"
+                :href="`/category/${cat.id}`"
+                :aria-label="`Открыть каталог: ${cat.title}`"
+                @click.stop
+              >
+                <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+                Открыть каталог
+              </a>
+            </div>
+          </div>
+        </article>
       </div>
-    </div>
-
-    <!-- Контент -->
-    <div class="body">
-      <div class="eyebrow" v-if="cat.eyebrow">{{ cat.eyebrow }}</div>
-      <h3 class="title">{{ cat.title }}</h3>
-      <p class="tagline" v-if="cat.tagline">{{ cat.tagline }}</p>
-
-      <ul class="perks" v-if="cat.perks?.length">
-        <li v-for="perk in cat.perks" :key="perk">
-          <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-          {{ perk }}
-        </li>
-      </ul>
-
-      <div class="meta" v-if="cat.price">
-        <div class="price">
-          <span class="price_text">от </span> {{ formatPrice(cat.price) }}
-        </div>
-      </div>
-
-      <!-- Кнопку можешь оставить или убрать -->
-      <div class="actions">
-        <a
-  class="btn--primary btn"
-  :href="`/category/${cat.id}`"
-  :aria-label="`Открыть каталог: ${cat.title}`"
-  @click.stop
->
-  <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-  Открыть каталог
-</a>
-      </div>
-    </div>
-  </article>
-</div>
-
     </div>
   </section>
 </template>
 
 <script setup>
 import { ref, onMounted } from "vue";
-import { useRouter } from "vue-router";
 
-const router = useRouter();
 const API_LIST = "/php/categories/list.php";
 const categories = ref([]);
+
+// текст бейджа (можешь поменять на 'Coming soon')
+const badgeText = ref("Скоро");
 
 function goToCategory(id) {
   window.location.href = `/category/${id}`;
 }
-
 
 function toArrayKeywords(k) {
   if (Array.isArray(k)) return k;
@@ -110,6 +121,7 @@ function mapItemToCard(item) {
     price: item.price,
     image: item.image_url || item.image || "",
     icon: "fa-solid fa-layer-group",
+    comingSoon: !!item.coming_soon, // новое поле
   };
 }
 
@@ -199,11 +211,31 @@ onMounted(loadCategories);
     gap: 22px;
   }
 }
-@media (max-width: 640px) {
-  .row {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
+
+/* Красный круг «Скоро» / Coming soon */
+.soon-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 66px;
+  height: 66px;
+  padding: 0 10px; /* позволяет тексту переноситься */
+  border-radius: 999px; /* аккуратный круг/капсула */
+  background: #ff2b2b; /* красный */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  line-height: 1.05;
+  text-align: center;
+  box-shadow: 0 10px 28px rgba(255, 43, 43, 0.35),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+  z-index: 2;
+  user-select: none;
 }
 
 /* ====== ПАНЕЛИ ====== */
@@ -318,6 +350,17 @@ onMounted(loadCategories);
 @media (max-width: 640px) {
   .perks {
     grid-template-columns: 1fr;
+  }
+  .soon-badge {
+    min-width: 56px;
+    height: 56px;
+    font-size: 10px;
+    top: 10px;
+    right: 10px;
+  }
+  .row {
+    grid-template-columns: 1fr;
+    gap: 18px;
   }
 }
 

@@ -1,50 +1,30 @@
+
 <template>
   <header class="header" :class="{ scrolled }">
     <div class="container">
       <!-- Левая: логотип -->
       <div class="left">
-        <a href="/" class="brand">
+        <router-link to="/" class="brand">
           <img class="logo" :src="logoSrc" alt="Логотип" />
-        </a>
+        </router-link>
       </div>
 
       <!-- Центр: навигация (десктоп) -->
       <nav class="nav desktop" aria-label="Главная навигация">
-        <a
-          href="#home"
-          class="link"
-          :class="{ active: active === 'home' }"
-          @click.prevent="goTo('home')"
-          >Главная</a
-        >
-        <a
-          href="#catalog"
-          class="link"
-          :class="{ active: active === 'catalog' }"
-          @click.prevent="goTo('catalog')"
-          >Каталог таблиц</a
-        >
-        <a
-          href="#about"
-          class="link"
-          :class="{ active: active === 'about' }"
-          @click.prevent="goTo('about')"
-          >О нас</a
-        >
-        <a
-          href="#feedback"
-          class="link"
-          :class="{ active: active === 'feedback' }"
-          @click.prevent="goTo('feedback')"
-          >Обратная связь</a
-        >
-        <a
-          href="#faq"
-          class="link"
-          :class="{ active: active === 'faq' }"
-          @click.prevent="goTo('faq')"
-          >Часто задаваемые вопросы</a
-        >
+        <router-link :to="{ path: '/', hash: '#home' }" class="link"
+          :class="{ active: isHome && active === 'home' }">Главная</router-link>
+
+        <router-link :to="{ path: '/', hash: '#catalog' }" class="link"
+          :class="{ active: isHome && active === 'catalog' }">Каталог</router-link>
+
+        <router-link :to="{ path: '/', hash: '#about' }" class="link"
+          :class="{ active: isHome && active === 'about' }">О нас</router-link>
+
+        <router-link :to="{ path: '/', hash: '#feedback' }" class="link"
+          :class="{ active: isHome && active === 'feedback' }">Обратная связь</router-link>
+
+        <router-link :to="{ path: '/', hash: '#faq' }" class="link"
+          :class="{ active: isHome && active === 'faq' }">Часто задаваемые вопросы</router-link>
       </nav>
 
       <!-- Правая: корзина + бургер -->
@@ -54,7 +34,6 @@
           <span v-if="count > 0" class="badge">{{ countLabel }}</span>
         </router-link>
 
-        <!-- Бургер справа -->
         <button
           class="burger"
           :class="{ open: mobileOpen }"
@@ -70,7 +49,7 @@
       </div>
     </div>
 
-    <!-- Мобильное меню (выпадает сверху) -->
+    <!-- Мобильное меню -->
     <transition name="drop">
       <nav
         v-if="mobileOpen"
@@ -79,219 +58,182 @@
         aria-label="Мобильное меню"
         @click.self="closeMobile"
       >
-        <a
-          href="#home"
-          class="mlink"
-          :class="{ active: active === 'home' }"
-          @click.prevent="goToAndClose('home')"
-          >Главная</a
-        >
-        <a
-          href="#catalog"
-          class="mlink"
-          :class="{ active: active === 'catalog' }"
-          @click.prevent="goToAndClose('catalog')"
-          >Каталог таблиц</a
-        >
-        <a
-          href="#about"
-          class="mlink"
-          :class="{ active: active === 'about' }"
-          @click.prevent="goToAndClose('about')"
-          >О нас</a
-        >
-        <a
-          href="#feedback"
-          class="mlink"
-          :class="{ active: active === 'feedback' }"
-          @click.prevent="goToAndClose('feedback')"
-          >Обратная связь</a
-        >
-        <a
-          href="#faq"
-          class="mlink"
-          :class="{ active: active === 'faq' }"
-          @click.prevent="goToAndClose('faq')"
-          >Обратная связь</a
-        >
+        <router-link :to="{ path: '/', hash: '#home' }" class="mlink"
+          :class="{ active: isHome && active === 'home' }" @click="closeMobile">Главная</router-link>
+
+        <router-link :to="{ path: '/', hash: '#catalog' }" class="mlink"
+          :class="{ active: isHome && active === 'catalog' }" @click="closeMobile">Каталог</router-link>
+
+        <router-link :to="{ path: '/', hash: '#about' }" class="mlink"
+          :class="{ active: isHome && active === 'about' }" @click="closeMobile">О нас</router-link>
+
+        <router-link :to="{ path: '/', hash: '#feedback' }" class="mlink"
+          :class="{ active: isHome && active === 'feedback' }" @click="closeMobile">Обратная связь</router-link>
+
+        <router-link :to="{ path: '/', hash: '#faq' }" class="mlink"
+          :class="{ active: isHome && active === 'faq' }" @click="closeMobile">Часто задаваемые вопросы</router-link>
       </nav>
     </transition>
   </header>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import logoSrc from "@/assets/logo/logo.png";
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import logoSrc from '@/assets/logo/logo.png'
 
-const STORAGE_KEY = "cart:v1"; // тот же, что в Cart.vue
-const HEADER_H = 90;
+const route = useRoute()
 
-const count = ref(0);
-const countLabel = computed(() =>
-  count.value > 99 ? "99+" : String(count.value)
-);
+const STORAGE_KEY = 'cart:v1'
+const HEADER_H = 90
 
-const active = ref("home");
-const mobileOpen = ref(false);
-const scrolled = ref(false);
+const count = ref(0)
+const countLabel = computed(() => (count.value > 99 ? '99+' : String(count.value)))
 
-const SECTION_IDS = ["home", "catalog", "about", "feedback", "faq"];
-let sections = [];
-let mo; // MutationObserver
-let retryTimer; // для повторных попыток
+const active = ref('home')
+const mobileOpen = ref(false)
+const scrolled = ref(false)
+const isHome = computed(() => route.path === '/')
+
+const SECTION_IDS = ['home', 'catalog', 'about', 'feedback', 'faq']
+let sections = []
+let mo
+let retryTimer
 
 /* ===== Корзина ===== */
 function updateCount() {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    count.value = Array.isArray(raw)
-      ? raw.reduce((s, it) => s + (Number(it?.qty) || 0), 0)
-      : 0;
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY))
+    count.value = Array.isArray(raw) ? raw.reduce((s, it) => s + (Number(it?.qty) || 0), 0) : 0
   } catch {
-    count.value = 0;
+    count.value = 0
   }
 }
+function onCartChange() { updateCount() }
+function onStorage(e) { if (e.key === STORAGE_KEY) updateCount() }
 
-// именованные обработчики, чтобы их снять при размонтировании
-function onCartChange() {
-  updateCount();
-}
-function onStorage(e) {
-  if (e.key === STORAGE_KEY) updateCount();
-}
-
-/* ===== Меню: блокировка скролла и управление ===== */
+/* ===== Меню ===== */
 function lockBody(lock) {
-  document.documentElement.style.overflow = lock ? "hidden" : "";
-  document.body.style.overflow = lock ? "hidden" : "";
+  document.documentElement.style.overflow = lock ? 'hidden' : ''
+  document.body.style.overflow = lock ? 'hidden' : ''
 }
-
 function toggleMobile() {
-  mobileOpen.value = !mobileOpen.value;
-  lockBody(mobileOpen.value);
+  mobileOpen.value = !mobileOpen.value
+  lockBody(mobileOpen.value)
 }
 function closeMobile() {
-  if (!mobileOpen.value) return;
-  mobileOpen.value = false;
-  lockBody(false);
-}
-function goToAndClose(id) {
-  goTo(id);
-  closeMobile();
+  if (!mobileOpen.value) return
+  mobileOpen.value = false
+  lockBody(false)
 }
 function onKeydown(e) {
-  if (e.key === "Escape") closeMobile();
+  if (e.key === 'Escape') closeMobile()
 }
 
 /* ===== Якорный скролл ===== */
 function goTo(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  const el = document.getElementById(id)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 /* ===== Секции / активный пункт ===== */
 function setupAnchorsScrollMargin() {
   SECTION_IDS.forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.style.scrollMarginTop = HEADER_H + "px";
-  });
+    const el = document.getElementById(id)
+    if (el) el.style.scrollMarginTop = HEADER_H + 'px'
+  })
 }
 function collectSections() {
-  sections = SECTION_IDS.map((id) => document.getElementById(id)).filter(
-    Boolean
-  );
+  sections = SECTION_IDS.map((id) => document.getElementById(id)).filter(Boolean)
 }
 function ensureSectionsReady() {
-  // 1) сразу
-  collectSections();
-  setupAnchorsScrollMargin();
-  if (sections.length) return;
+  collectSections()
+  setupAnchorsScrollMargin()
+  if (sections.length) return
 
-  // 2) быстрые ретраи (если контент догружается)
-  let attempts = 0;
-  clearInterval(retryTimer);
+  let attempts = 0
+  clearInterval(retryTimer)
   retryTimer = setInterval(() => {
-    attempts++;
-    collectSections();
-    setupAnchorsScrollMargin();
+    attempts++
+    collectSections()
+    setupAnchorsScrollMargin()
     if (sections.length || attempts > 50) {
-      clearInterval(retryTimer);
-      updateActiveByScroll();
+      clearInterval(retryTimer)
+      updateActiveByScroll()
     }
-  }, 100);
+  }, 100)
 
-  // 3) наблюдение DOM
   if (!mo) {
     mo = new MutationObserver(() => {
-      const before = sections.length;
-      collectSections();
-      setupAnchorsScrollMargin();
+      const before = sections.length
+      collectSections()
+      setupAnchorsScrollMargin()
       if (sections.length && !before) {
-        updateActiveByScroll();
+        updateActiveByScroll()
       }
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
+    })
+    mo.observe(document.body, { childList: true, subtree: true })
   }
 }
 
 function updateActiveByScroll() {
-  scrolled.value = window.scrollY > 4;
+  scrolled.value = window.scrollY > 4
 
   if (!sections.length) {
-    collectSections();
-    if (!sections.length) return;
+    collectSections()
+    if (!sections.length) return
   }
-  const cursor = window.scrollY + HEADER_H + 6;
-  const absTop = (el) => el.getBoundingClientRect().top + window.scrollY;
-  const absBottom = (el) => absTop(el) + el.offsetHeight;
+  const cursor = window.scrollY + HEADER_H + 6
+  const absTop = (el) => el.getBoundingClientRect().top + window.scrollY
+  const absBottom = (el) => absTop(el) + el.offsetHeight
 
-  let current = sections.find(
-    (el) => absTop(el) <= cursor && absBottom(el) > cursor
-  );
+  let current = sections.find((el) => absTop(el) <= cursor && absBottom(el) > cursor)
   if (!current) {
-    current = sections
-      .filter((el) => absTop(el) <= cursor)
-      .sort((a, b) => absTop(b) - absTop(a))[0];
+    current = sections.filter((el) => absTop(el) <= cursor).sort((a, b) => absTop(b) - absTop(a))[0]
   }
-  if (!current && window.scrollY < 20) current = sections[0];
-  if (current) active.value = current.id;
+  if (!current && window.scrollY < 20) current = sections[0]
+  if (current) active.value = current.id
 }
 
-// именованный resize-обработчик
 function onResize() {
-  collectSections();
-  setupAnchorsScrollMargin();
-  updateActiveByScroll();
+  collectSections()
+  setupAnchorsScrollMargin()
+  updateActiveByScroll()
 }
 
 /* ===== Lifecycle ===== */
-onMounted(() => {
-  // корзина
-  updateCount();
-  window.addEventListener("storage", onStorage);
-  window.addEventListener("cart:change", onCartChange);
+onMounted(async () => {
+  updateCount()
+  window.addEventListener('storage', onStorage)
+  window.addEventListener('cart:change', onCartChange)
 
-  // секции
-  ensureSectionsReady();
-  updateActiveByScroll();
+  ensureSectionsReady()
+  updateActiveByScroll()
 
-  // события
-  window.addEventListener("scroll", updateActiveByScroll, { passive: true });
-  window.addEventListener("resize", onResize);
-  window.addEventListener("keydown", onKeydown);
-});
+  window.addEventListener('scroll', updateActiveByScroll, { passive: true })
+  window.addEventListener('resize', onResize)
+  window.addEventListener('keydown', onKeydown)
+
+  // Если открыли сразу с хэшем — прокрутим
+  if (route.hash) {
+    await nextTick()
+    const id = route.hash.slice(1)
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+})
 
 onBeforeUnmount(() => {
-  window.removeEventListener("scroll", updateActiveByScroll);
-  window.removeEventListener("resize", onResize);
-  window.removeEventListener("keydown", onKeydown);
-  window.removeEventListener("storage", onStorage);
-  window.removeEventListener("cart:change", onCartChange);
-  clearInterval(retryTimer);
-  if (mo) mo.disconnect();
-  lockBody(false);
-});
+  window.removeEventListener('scroll', updateActiveByScroll)
+  window.removeEventListener('resize', onResize)
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('storage', onStorage)
+  window.removeEventListener('cart:change', onCartChange)
+  clearInterval(retryTimer)
+  if (mo) mo.disconnect()
+  lockBody(false)
+})
 </script>
 
 <style scoped>

@@ -273,6 +273,18 @@ if (!window.addToCart) {
     linear-gradient(1deg, #0f0b1a, #121b30 45%, #153345 70%, #183e5a);
   min-height: 100vh;
 }
+
+.cart__notice {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 153, 0, 0.35);
+  background: rgba(255, 153, 0, 0.12);
+  color: #ffd9a8;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+
 .cart__container {
   max-width: 1200px;
   margin: 0 auto;

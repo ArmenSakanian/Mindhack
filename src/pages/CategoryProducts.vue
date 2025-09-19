@@ -1,6 +1,42 @@
 <template>
   <section class="category-products">
     <div class="container">
+      <!-- Хлебные крошки -->
+      <nav
+        class="breadcrumbs"
+        aria-label="Хлебные крошки"
+        itemscope
+        itemtype="https://schema.org/BreadcrumbList"
+      >
+        <!-- 1. Каталог -->
+        <span
+          itemprop="itemListElement"
+          itemscope
+          itemtype="https://schema.org/ListItem"
+        >
+          <router-link :to="catalogLink" itemprop="item">
+            <span itemprop="name">Каталог</span>
+          </router-link>
+          <meta itemprop="position" content="1" />
+        </span>
+
+        <span class="sep"> / </span>
+
+        <!-- 2. Текущая категория -->
+        <span
+          v-if="categoryTitle"
+          itemprop="itemListElement"
+          itemscope
+          itemtype="https://schema.org/ListItem"
+          aria-current="page"
+        >
+          <span itemprop="item">
+            <span itemprop="name">{{ categoryTitle }}</span>
+          </span>
+          <meta itemprop="position" content="2" />
+        </span>
+      </nav>
+
       <!-- Заголовок категории -->
       <header class="head">
         <h2>{{ headerTitle }}</h2>
@@ -126,7 +162,7 @@
                 </template>
               </p>
 
-              <!-- Фичи — более плотная сетка на десктопе -->
+              <!-- Фичи -->
               <ul class="features" v-if="p.features?.length">
                 <li v-for="f in p.features" :key="f">
                   <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
@@ -147,7 +183,10 @@
               <!-- Футер карточки: цена + действия -->
               <div class="meta">
                 <div class="price" v-if="p.price != null">
-                  {{ formatPrice(p.price) }}
+                  <span v-if="hasDiscount(p)" class="old-price">{{
+                    formatPrice(p.price_old)
+                  }}</span>
+                  <span class="new-price">{{ formatPrice(p.price) }}</span>
                 </div>
 
                 <div class="actions">
@@ -187,13 +226,13 @@
 </template>
 
 <script setup lang="ts">
-/* Твой скрипт оставлен без изменений: логика загрузки, слайдер, корзина и т.д. */
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 const props = defineProps({
   categoryId: { type: [String, Number], default: null },
 });
+
 const route = useRoute();
 const router = useRouter();
 
@@ -201,14 +240,14 @@ const categoryTitle = ref("");
 const loading = ref(false);
 const error = ref("");
 const toast = ref("");
-const products = ref([]);
+const products = ref<any[]>([]);
 
-const slideIndex = ref(new Map());
-const animSet = ref(new Set());
-const animDir = ref(new Map());
-const animPhase = ref(new Map());
-const pausedSet = ref(new Set());
-let autoplayTimer = null;
+const slideIndex = ref<Map<number, number>>(new Map());
+const animSet = ref<Set<number>>(new Set());
+const animDir = ref<Map<number, "left" | "right">>(new Map());
+const animPhase = ref<Map<number, "" | "out" | "in">>(new Map());
+const pausedSet = ref<Set<number>>(new Set());
+let autoplayTimer: number | null = null;
 
 const defaultImg =
   "data:image/svg+xml;utf8," +
@@ -220,37 +259,40 @@ const defaultImg =
   <circle cx='1100' cy='80' r='220' fill='rgba(135,77,255,0.12)'/>
   </svg>`);
 
-function pickImages(raw) {
+const catalogLink = computed(() => ({ path: "/", hash: "#catalog" }));
+
+const currentCategoryId = computed<number | null>(() => {
+  const id =
+    (route.params.id as string) ||
+    (route.query.category_id as string) ||
+    (props.categoryId as any);
+  return id ? Number(id) : null;
+});
+
+const categoryLink = computed(() =>
+  currentCategoryId.value != null
+    ? { name: "category", params: { id: currentCategoryId.value } }
+    : { name: "categoryQuery" }
+);
+
+function pickImages(raw: any) {
   const arr = Array.isArray(raw.images) ? raw.images : [];
   const withUrls = arr
-    .map((img) => ({
+    .map((img: any) => ({
       url: img.url_full || img.url || "",
       is_primary: Number(img.is_primary) || 0,
       sort: Number(img.sort) || 0,
       id: Number(img.id) || 0,
     }))
-    .filter((x) => !!x.url);
+    .filter((x: any) => !!x.url);
   if (!withUrls.length) return [];
   return withUrls.sort(
-    (a, b) => b.is_primary - a.is_primary || a.sort - b.sort || a.id - b.id
+    (a: any, b: any) =>
+      b.is_primary - a.is_primary || a.sort - b.sort || a.id - b.id
   );
 }
-function normalizeProduct(raw) {
+function normalizeProduct(raw: any) {
   const images = pickImages(raw);
-  if (!images.length) {
-    const fallback = raw.image_url || raw.image || "";
-    if (fallback) {
-      return {
-        id: raw.id,
-        eyebrow: raw.eyebrow || "",
-        title: raw.title,
-        tagline: raw.tagline || "",
-        features: Array.isArray(raw.features) ? raw.features : [],
-        price: raw.price != null ? Number(raw.price) : null,
-        images: [{ url: fallback, is_primary: 1, sort: 1, id: 0 }],
-      };
-    }
-  }
   return {
     id: raw.id,
     eyebrow: raw.eyebrow || "",
@@ -258,30 +300,55 @@ function normalizeProduct(raw) {
     tagline: raw.tagline || "",
     features: Array.isArray(raw.features) ? raw.features : [],
     price: raw.price != null ? Number(raw.price) : null,
-    images,
+    price_old: raw.price_old != null ? Number(raw.price_old) : null, // добавлено
+    images: images.length
+      ? images
+      : [
+          {
+            url: raw.image_url || raw.image || "",
+            is_primary: 1,
+            sort: 1,
+            id: 0,
+          },
+        ],
   };
 }
-function formatPrice(val) {
+
+function formatPrice(val: number | string) {
   const n = Number(val);
-  if (!Number.isFinite(n)) return val;
+  if (!Number.isFinite(n)) return String(val);
   return (
     new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n) +
     " ₽"
   );
 }
+
+/** Показать старую цену только если есть реальная скидка */
+function hasDiscount(p: any) {
+  const oldN = Number(p?.price_old);
+  const newN = Number(p?.price);
+  return (
+    Number.isFinite(oldN) && Number.isFinite(newN) && oldN > newN && newN > 0
+  );
+}
+
 const headerTitle = computed(() => categoryTitle.value || "Каталог");
 
-function ensureIndex(pid) {
+function ensureIndex(pid: number) {
   if (!slideIndex.value.has(pid)) slideIndex.value.set(pid, 0);
 }
-function currentSlideUrl(p) {
+function currentSlideUrl(p: any) {
   ensureIndex(p.id);
   const i = slideIndex.value.get(p.id) || 0;
   const arr = p.images && p.images.length ? p.images : [{ url: defaultImg }];
   const item = arr[(i + arr.length) % arr.length] || arr[0];
   return item?.url || defaultImg;
 }
-function animateSwitch(pid, dir, changeIndexFn) {
+function animateSwitch(
+  pid: number,
+  dir: "left" | "right",
+  changeIndexFn: () => void
+) {
   if (pausedSet.value.has(pid)) {
     changeIndexFn();
     return;
@@ -298,37 +365,40 @@ function animateSwitch(pid, dir, changeIndexFn) {
     }, 220);
   }, 160);
 }
-function next(p) {
+function next(p: any) {
   const pid = p.id;
   ensureIndex(pid);
   const arr = p.images || [];
   if (arr.length < 2) return;
   animateSwitch(pid, "left", () => {
-    slideIndex.value.set(pid, (slideIndex.value.get(pid) + 1) % arr.length);
+    slideIndex.value.set(
+      pid,
+      ((slideIndex.value.get(pid) || 0) + 1) % arr.length
+    );
   });
 }
-function prev(p) {
+function prev(p: any) {
   const pid = p.id;
   ensureIndex(pid);
   const arr = p.images || [];
   if (arr.length < 2) return;
   animateSwitch(pid, "right", () => {
-    const i = slideIndex.value.get(pid);
+    const i = slideIndex.value.get(pid) || 0;
     slideIndex.value.set(pid, (i - 1 + arr.length) % arr.length);
   });
 }
-function goTo(p, i) {
+function goTo(p: any, i: number) {
   const pid = p.id;
   ensureIndex(pid);
   const arr = p.images || [];
   if (!arr.length) return;
   const cur = slideIndex.value.get(pid) || 0;
-  const dir = i > cur ? "left" : "right";
+  const dir: "left" | "right" = i > cur ? "left" : "right";
   animateSwitch(pid, dir, () => {
     slideIndex.value.set(pid, Math.max(0, Math.min(i, arr.length - 1)));
   });
 }
-function imgAnimClass(pid) {
+function imgAnimClass(pid: number) {
   const is = animSet.value.has(pid);
   const phase = animPhase.value.get(pid) || "";
   const dir = animDir.value.get(pid) || "left";
@@ -341,16 +411,12 @@ function imgAnimClass(pid) {
   };
 }
 
-/* Автоплей только для видимых карточек */
+/* Автоплей */
 function startAutoplay() {
   stopAutoplay();
-  autoplayTimer = setInterval(() => {
-    const cards = document.querySelectorAll(".product-card");
+  autoplayTimer = window.setInterval(() => {
     for (const p of products.value) {
       if (!p.images || p.images.length < 2) continue;
-      // проверяем видимость карточки (50%+)
-      const card =
-        Array.from(cards).find((el) => el && el.__pid === p.id) || null;
       if (pausedSet.value.has(p.id)) continue;
       next(p);
     }
@@ -362,14 +428,21 @@ function stopAutoplay() {
     autoplayTimer = null;
   }
 }
-function onHover(state, pid) {
+function onHover(state: boolean, pid: number) {
   if (state) pausedSet.value.add(pid);
   else pausedSet.value.delete(pid);
 }
 
 /* Свайп */
-const touch = { x: 0, y: 0, dx: 0, dy: 0, active: false, pid: null };
-function onTouchStart(e, pid) {
+const touch = {
+  x: 0,
+  y: 0,
+  dx: 0,
+  dy: 0,
+  active: false,
+  pid: null as null | number,
+};
+function onTouchStart(e: TouchEvent, pid: number) {
   const t = e.changedTouches?.[0];
   if (!t) return;
   touch.x = t.clientX;
@@ -380,14 +453,14 @@ function onTouchStart(e, pid) {
   touch.pid = pid;
   pausedSet.value.add(pid);
 }
-function onTouchMove(e) {
+function onTouchMove(e: TouchEvent) {
   if (!touch.active) return;
   const t = e.changedTouches?.[0];
   if (!t) return;
   touch.dx = t.clientX - touch.x;
   touch.dy = t.clientY - touch.y;
 }
-function onTouchEnd(p) {
+function onTouchEnd(p: any) {
   if (!touch.active || touch.pid !== p.id) return;
   const THRESH = 40;
   if (Math.abs(touch.dx) > Math.abs(touch.dy) && Math.abs(touch.dx) > THRESH) {
@@ -399,7 +472,7 @@ function onTouchEnd(p) {
   touch.pid = null;
 }
 
-function colonize(s) {
+function colonize(s: string) {
   if (typeof s !== "string") return { before: "", after: "", has: false };
   const idx = s.indexOf(":");
   if (idx === -1) return { before: s, after: "", has: false };
@@ -410,12 +483,11 @@ function colonize(s) {
   };
 }
 
-function isLong(s) {
-  return (s?.length || 0) > 140; // порог можно подстроить
+function isLong(s: string) {
+  return (s?.length || 0) > 140;
 }
-function useColonHighlight(s) {
+function useColonHighlight(s: string) {
   const c = colonize(s);
-  // Подсветку делаем только если есть ":" и текст не длинный
   return c.has && !isLong(s);
 }
 
@@ -425,7 +497,9 @@ async function load() {
   products.value = [];
   categoryTitle.value = "";
   const categoryId =
-    route.params.id || route.query.category_id || props.categoryId;
+    (route.params.id as string) ||
+    (route.query.category_id as string) ||
+    props.categoryId;
   if (!categoryId) {
     error.value = "Не указан идентификатор категории в маршруте.";
     return;
@@ -433,7 +507,7 @@ async function load() {
   loading.value = true;
   try {
     const url = `/php/products/list.php?category_id=${encodeURIComponent(
-      categoryId
+      String(categoryId)
     )}&page=1&limit=100`;
     const res = await fetch(url, {
       headers: { Accept: "application/json" },
@@ -449,13 +523,13 @@ async function load() {
     const mapped = list.map(normalizeProduct);
     products.value = mapped;
 
-    slideIndex.value = new Map(mapped.map((p) => [p.id, 0]));
+    slideIndex.value = new Map(mapped.map((p: any) => [p.id, 0]));
     animSet.value.clear();
     animDir.value.clear();
     animPhase.value.clear();
     pausedSet.value.clear();
     startAutoplay();
-  } catch (e) {
+  } catch (e: any) {
     error.value = "Не удалось загрузить продукты. " + (e?.message || "");
   } finally {
     loading.value = false;
@@ -467,56 +541,66 @@ watch(() => route.fullPath, load);
 onBeforeUnmount(stopAutoplay);
 
 /* ===== Корзина (единый формат для CartPage.vue) ===== */
-import { ref } from "vue";
-import { useRouter } from "vue-router";
-
 const CART_KEY = "cart:v1";
 
-/** Читаем корзину в едином формате */
-function getCart(): Array<{id:number; name:string; priceKopecks:number; image:string; qty:number}> {
+type CartItem = {
+  id: number;
+  name: string;
+  priceKopecks: number;
+  image: string;
+  qty: number;
+};
+
+function getCart(): CartItem[] {
   try {
     const raw = localStorage.getItem(CART_KEY);
     const arr = raw ? JSON.parse(raw) : [];
     return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
 function setCart(arr: any[]) {
   localStorage.setItem(CART_KEY, JSON.stringify(arr));
-  // уведомим другие вкладки/виджеты
   try {
-    window.dispatchEvent(new StorageEvent("storage", { key: CART_KEY, newValue: JSON.stringify(arr) }));
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: CART_KEY,
+        newValue: JSON.stringify(arr),
+      })
+    );
   } catch {}
-  window.dispatchEvent(new CustomEvent("mh:cart-updated", {
-    detail: { count: arr.reduce((s, i) => s + (Number(i.qty)||0), 0) }
-  }));
+  window.dispatchEvent(
+    new CustomEvent("mh:cart-updated", {
+      detail: {
+        count: arr.reduce((s: number, i: any) => s + (Number(i.qty) || 0), 0),
+      },
+    })
+  );
 }
 
-/** Множество id товаров, уже лежащих в корзине (для отображения состояния кнопок) */
 const cartIds = ref<Set<number>>(new Set());
 function refreshCartIds() {
-  cartIds.value = new Set(getCart().map(i => Number(i.id)));
+  cartIds.value = new Set(getCart().map((i) => Number(i.id)));
 }
 function inCart(id: number | string) {
   return cartIds.value.has(Number(id));
 }
 
-/** Текущий URL обложки для карточки (используем твой слайдер) */
 function coverUrlFor(p: any): string {
   const url = currentSlideUrl(p);
   return url || defaultImg;
 }
 
-/** Добавление товара (инкремент qty, конвертация цены в копейки) */
 function addToCart(p: any, qty = 1) {
   const cart = getCart();
   const id = Number(p.id);
-  const priceKopecks = Math.round(Number(p.price || 0) * 100); // из ₽ в копейки
+  const priceKopecks = Math.round(Number(p.price || 0) * 100); // со скидкой в копейках
   const image = coverUrlFor(p);
 
-  const i = cart.findIndex(it => Number(it.id) === id);
+  const i = cart.findIndex((it) => Number(it.id) === id);
   if (i >= 0) {
     cart[i].qty = Math.min(999, Number(cart[i].qty || 1) + qty);
-    // подстрахуем возможные старые поля
     cart[i].name = cart[i].name ?? p.title;
     cart[i].priceKopecks = cart[i].priceKopecks ?? priceKopecks;
     cart[i].image = cart[i].image ?? image;
@@ -526,7 +610,7 @@ function addToCart(p: any, qty = 1) {
       name: p.title,
       priceKopecks,
       image,
-      qty: Math.max(1, qty)
+      qty: Math.max(1, qty),
     });
   }
 
@@ -535,47 +619,44 @@ function addToCart(p: any, qty = 1) {
   showToast(`Добавлено в корзину: «${p.title}»`);
 }
 
-/** Удаление товара */
 function removeFromCart(p: any) {
   const id = Number(p.id);
-  const cart = getCart().filter(it => Number(it.id) !== id);
+  const cart = getCart().filter((it) => Number(it.id) !== id);
   setCart(cart);
   refreshCartIds();
   showToast(`Удалено из корзины: «${p.title}»`);
 }
 
-/** Переход к оформлению */
 function goToCart() {
   router.push("/cart");
 }
 
 /** Toast */
-import { ref as vueRef, onMounted, onBeforeUnmount } from "vue";
 let toastTimer: number | null = null;
 function showToast(text: string) {
   toast.value = text;
   if (toastTimer) clearTimeout(toastTimer as any);
-  // @ts-ignore
-  toastTimer = setTimeout(() => (toast.value = ""), 1800);
+  toastTimer = window.setTimeout(() => (toast.value = ""), 1800);
 }
 
 /** Слушатели, чтобы кнопки «В корзине» мгновенно обновлялись */
-function onAnyCartUpdate() { refreshCartIds(); }
+function onAnyCartUpdate() {
+  refreshCartIds();
+}
 onMounted(() => {
   refreshCartIds();
   window.addEventListener("mh:cart-updated", onAnyCartUpdate);
-  window.addEventListener("storage", e => { if (e.key === CART_KEY) refreshCartIds(); });
+  window.addEventListener("storage", (e) => {
+    if (e.key === CART_KEY) refreshCartIds();
+  });
 });
 onBeforeUnmount(() => {
   window.removeEventListener("mh:cart-updated", onAnyCartUpdate);
 });
-
-
 </script>
 
 <style scoped>
 :root {
-  /* здесь можно переопределить глобально через :root в проекте */
   --accent-color: #ff9900;
 }
 
@@ -601,6 +682,40 @@ onBeforeUnmount(() => {
 .container {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+/* Хлебные крошки */
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  margin-bottom: 20px;
+  color: #cfc7de; /* базовый цвет текста */
+  margin-top: 60px;
+}
+
+.breadcrumbs a {
+  color: var(--accent-color); /* твой оранжевый */
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.breadcrumbs a:hover {
+  color: #ffd280; /* подсветка при наведении */
+}
+
+.breadcrumbs .sep {
+  opacity: 0.6;
+  color: #aaa;
+  user-select: none;
+}
+
+.breadcrumbs [aria-current="page"] {
+  color: #fff; /* текущая страница — белая */
+  font-weight: 700;
 }
 
 /* Заголовок */
@@ -683,7 +798,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Список карточек — плотная сетка, карточки горизонтальные */
+/* Список карточек */
 .list {
   display: grid;
   gap: 22px;
@@ -716,7 +831,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   min-height: 320px;
-  aspect-ratio: 4/3; /* удерживаем пропорции */
+  aspect-ratio: 4/3;
   overflow: hidden;
 }
 .media img {
@@ -739,8 +854,8 @@ onBeforeUnmount(() => {
   animation: slideInLeft 0.22s ease both;
 }
 .media img.sliding.phase-out.dir-right {
-  animation: slideOutRight.16s ease both;
-}
+  animation: slideOutRight 0.16s ease both;
+} /* фикс ".16s" */
 .media img.sliding.phase-in.dir-right {
   animation: slideInRight 0.22s ease both;
 }
@@ -893,7 +1008,6 @@ onBeforeUnmount(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-
 .tagline.full {
   display: block;
   -webkit-line-clamp: unset;
@@ -907,7 +1021,6 @@ onBeforeUnmount(() => {
   order: 1;
 }
 
-/* На мобиле всегда фото сверху, текст снизу (отключаем чередование) */
 @media (max-width: 980px) {
   .list > .product-card:nth-child(even) .media {
     order: -1;
@@ -917,7 +1030,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Фичи: 2 колонки на десктопе, одна на мобиле */
+/* Фичи */
 .features {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -947,7 +1060,7 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-/* Метаданные/действия – прилипающий футер внутри карточки */
+/* Метаданные/действия */
 .meta {
   margin-top: 12px;
   display: flex;
@@ -955,10 +1068,23 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
 }
+
+/* Цена */
 .price {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.old-price {
+  color: #e63946;
+  text-decoration: line-through;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.new-price {
+  color: var(--accent-color);
   font-weight: 900;
   font-size: clamp(18px, 1.8vw, 22px);
-  color: var(--accent-color);
 }
 
 /* Кнопки */
@@ -968,7 +1094,6 @@ onBeforeUnmount(() => {
   gap: 10px;
   flex-wrap: wrap;
 }
-
 .btn-outline,
 .btn-ghost {
   display: inline-flex;
@@ -978,7 +1103,6 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   font-weight: 800;
 }
-
 .btn-outline {
   border: 2px solid var(--accent-color);
   background: transparent;
@@ -990,7 +1114,6 @@ onBeforeUnmount(() => {
   background: rgba(255, 153, 0, 0.12);
   border-color: #ffae33;
 }
-
 .btn-ghost {
   justify-content: center;
   width: 44px;
@@ -1080,7 +1203,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* Accessibility: уважаем prefers-reduced-motion */
+/* Предпочтение: сниженная анимация */
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;

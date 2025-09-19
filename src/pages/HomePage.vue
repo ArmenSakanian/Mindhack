@@ -1,6 +1,6 @@
 <template>
   <div>
-    <slide />
+    <!-- <slide /> -->
     <CategoryGrid />
     <AboutUs />
     <ContactForm />

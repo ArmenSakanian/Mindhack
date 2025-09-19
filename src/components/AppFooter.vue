@@ -9,7 +9,7 @@
       <!-- Основное меню -->
       <nav class="footer-menu">
         <ul>
-          <li><a href="#catalog">Категории таблиц</a></li>
+          <li><a href="#catalog">Каталог</a></li>
           <li><a href="#about">О нас</a></li>
           <li><a href="#contact">Обратная связь</a></li>
           <li><a href="#faq">Часто задаваемые вопросы</a></li>

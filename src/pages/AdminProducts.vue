@@ -174,10 +174,28 @@
           </small>
         </div>
 
-        <!-- Цена -->
+        <!-- Цены -->
         <div class="field inline">
           <div class="field w-50">
-            <label for="price">Цена (₽) <span class="req">*</span></label>
+            <label for="price_old">Цена без скидки</label>
+            <input
+              id="price_old"
+              v-model.number="form.price_old"
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="0.00"
+              :class="{ invalid: touched.price_old && !valid.price_old }"
+              @blur="touched.price_old = true"
+            />
+            <small class="hint">Необязательно. Показывается зачёркнутой.</small>
+            <small v-if="touched.price_old && !valid.price_old" class="error"
+              >Если указана, должна быть ≥ цены со скидкой.</small
+            >
+          </div>
+
+          <div class="field w-50">
+            <label for="price">Цена со скидкой (₽) <span class="req">*</span></label>
             <input
               id="price"
               v-model.number="form.price"
@@ -345,7 +363,8 @@
             </div>
 
             <div class="meta">
-              <span class="price">от {{ formatPrice(p.price) }}</span>
+              <span v-if="p.price_old && p.price_old >= p.price" class="old-price">{{ formatPrice(p.price_old) }}</span>
+              <span class="price">{{ formatPrice(p.price) }}</span>
             </div>
 
             <!-- Можно подсветить, что у продукта есть ссылка -->
@@ -423,9 +442,10 @@ const blankForm = () => ({
   eyebrow: "",
   title: "",
   tagline: "",
-  link_url: "",           // <--- добавлено
+  link_url: "",
   features: [],
-  price: null,
+  price_old: null, // <--- НОВОЕ: без скидки (опц.)
+  price: null,     // со скидкой (обязат.)
 
   // Галерея
   existingImages: /** @type {Array<{id:number,url:string,url_full?:string,alt?:string,sort:number,is_primary:number}>} */ ([]),
@@ -438,8 +458,9 @@ const touched = reactive({
   eyebrow: false,
   title: false,
   tagline: false,
-  link_url: false,        // <--- добавлено
+  link_url: false,
   features: false,
+  price_old: false, // <--- новое
   price: false,
   images: false,
 });
@@ -481,7 +502,7 @@ function addFeature() {
   const lower = val.toLowerCase();
   if (form.features.some((k) => k.toLowerCase() === lower)) {
     return notify("Такой пункт уже добавлен", "warn");
-  }
+    }
   form.features.push(val);
   featureInput.value = "";
   touched.features = true;
@@ -551,6 +572,7 @@ function moveDown(idx) {
   const a = list[idx];
   const b = list[idx + 1];
   list[idx] = b;
+  list[idx] = b;
   list[idx + 1] = a;
   writeBackGallery(list);
 }
@@ -596,9 +618,18 @@ const valid = reactive({
   get eyebrow() { return form.eyebrow.length > 0; },
   get title() { return form.title.length > 0; },
   get tagline() { return form.tagline.length > 0; },
-  get link_url() { return form.link_url.length > 0; },   // <--- добавлено (без строгой URL-проверки)
-  get features() { return form.features.length >= FEAT_MIN; },
+  get link_url() { return form.link_url.length > 0; },
   get price() { return typeof form.price === "number" && form.price > 0; },
+  get price_old() {
+    // опциональна; если задана — должна быть >= price
+    if (form.price_old === null || form.price_old === "" || typeof form.price_old === "undefined") return true;
+    const po = Number(form.price_old);
+    const p = Number(form.price ?? 0);
+    if (!Number.isFinite(po) || po <= 0) return false;
+    if (!Number.isFinite(p) || p <= 0) return true; // само поле price валидируем отдельно
+    return po >= p;
+  },
+  get features() { return form.features.length >= FEAT_MIN; },
   get images() {
     const count = form.existingImages.length + form.newImages.length;
     return count >= 1;
@@ -610,9 +641,10 @@ const isFormValid = computed(
     valid.eyebrow &&
     valid.title &&
     valid.tagline &&
-    valid.link_url &&   // <--- учитываем поле
+    valid.link_url &&
     valid.features &&
     valid.price &&
+    valid.price_old && // учитываем связку
     valid.images
 );
 
@@ -623,8 +655,9 @@ function snapshotForm(obj = form) {
     eyebrow: obj.eyebrow,
     title: obj.title,
     tagline: obj.tagline,
-    link_url: obj.link_url,              // <--- добавлено
+    link_url: obj.link_url,
     features: obj.features.slice(),
+    price_old: obj.price_old,
     price: obj.price,
     existingIds: obj.existingImages.map((x) => x.id),
     newCount: obj.newImages.length,
@@ -682,8 +715,9 @@ function mapProduct(r) {
     eyebrow: r.eyebrow || "",
     title: r.title || "",
     tagline: r.tagline || "",
-    link_url: r.link_url || "",        // <--- добавлено
+    link_url: r.link_url || "",
     features: Array.isArray(r.features) ? r.features : [],
+    price_old: r.price_old != null ? Number(r.price_old) : null, // <--- новое поле
     price: Number(r.price),
     image: r.image || "",
     image_url: r.image_url || "",
@@ -732,9 +766,12 @@ async function createProduct() {
     fd.append("eyebrow", form.eyebrow);
     fd.append("title", form.title);
     fd.append("tagline", form.tagline);
-    fd.append("link_url", form.link_url);                 // <--- добавлено
+    fd.append("link_url", form.link_url);
     fd.append("features", JSON.stringify(form.features));
-    fd.append("price", String(form.price));
+    fd.append("price", String(form.price)); // со скидкой
+    if (form.price_old != null && form.price_old !== "") {
+      fd.append("price_old", String(form.price_old)); // без скидки (опц.)
+    }
 
     for (const it of form.newImages) {
       fd.append("images[]", it.file);
@@ -766,9 +803,14 @@ async function updateProduct() {
     fd.append("eyebrow", form.eyebrow);
     fd.append("title", form.title);
     fd.append("tagline", form.tagline);
-    fd.append("link_url", form.link_url);                 // <--- добавлено
+    fd.append("link_url", form.link_url);
     fd.append("features", JSON.stringify(form.features));
     fd.append("price", String(form.price));
+    if (form.price_old == null || form.price_old === "") {
+      fd.append("price_old", ""); // чтобы бэкенд мог занулить при очистке
+    } else {
+      fd.append("price_old", String(form.price_old));
+    }
 
     for (const it of form.newImages) {
       fd.append("images[]", it.file);
@@ -849,8 +891,9 @@ async function onSubmit() {
     touched.eyebrow =
     touched.title =
     touched.tagline =
-    touched.link_url =     // <--- добавлено
+    touched.link_url =
     touched.features =
+    touched.price_old =
     touched.price =
     touched.images =
       true;
@@ -876,8 +919,9 @@ function startEdit(p) {
   form.eyebrow = p.eyebrow;
   form.title = p.title;
   form.tagline = p.tagline;
-  form.link_url = p.link_url || "";                 // <--- добавлено
+  form.link_url = p.link_url || "";
   form.features = p.features.slice();
+  form.price_old = p.price_old;   // <--- новое
   form.price = p.price;
 
   const ex = Array.isArray(p.images) ? p.images : [];
@@ -905,8 +949,9 @@ function startEdit(p) {
     eyebrow: form.eyebrow,
     title: form.title,
     tagline: form.tagline,
-    link_url: form.link_url,               // <--- добавлено
+    link_url: form.link_url,
     features: form.features.slice(),
+    price_old: form.price_old,
     price: form.price,
     existingIds: form.existingImages.map((x) => x.id),
     newCount: 0,
@@ -937,8 +982,9 @@ function resetTouched() {
     touched.eyebrow =
     touched.title =
     touched.tagline =
-    touched.link_url =     // <--- добавлено
+    touched.link_url =
     touched.features =
+    touched.price_old =
     touched.price =
     touched.images =
       false;
@@ -959,7 +1005,6 @@ onMounted(async () => {
   await Promise.all([loadCategoryOptions(), fetchProducts()]);
 });
 </script>
-
 
 <style scoped>
 /* ===== Фон страницы — как у категорий ===== */
@@ -1324,6 +1369,10 @@ select.invalid {
 }
 .price {
   font-weight: 800;
+}
+.old-price {
+  text-decoration: line-through;
+  color: var(--muted);
 }
 
 .thumb {

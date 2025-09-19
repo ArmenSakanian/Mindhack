@@ -36,7 +36,8 @@ try {
     $stmt->execute([':cid' => $category_id]);
     $total = (int)$stmt->fetchColumn();
 
-    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, link_url, features, price, image, created_at, updated_at
+    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, link_url,
+                   features, price_old, price, image, created_at, updated_at
             FROM products
             WHERE category_id=:cid
             ORDER BY created_at DESC
@@ -45,7 +46,8 @@ try {
     $stmt->bindValue(':cid', $category_id, PDO::PARAM_INT);
   } else {
     $total = (int)$pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
-    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, link_url, features, price, image, created_at, updated_at
+    $sql = "SELECT id, category_id, category_title, eyebrow, title, tagline, link_url,
+                   features, price_old, price, image, created_at, updated_at
             FROM products
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset";
@@ -120,11 +122,16 @@ $items = array_map(function($r) use ($baseUrl, $imagesByProduct) {
   $image_url = $image;
   if ($image && $baseUrl && strpos($image, 'http') !== 0) {
     $imgRel = $image[0] === '/' ? $image : ('/' . $image);
-    $image_url = $baseUrl . $imgRel; // <-- конкатенация строк
+    $image_url = $baseUrl . $imgRel;
   }
 
   $pid = (int)$r['id'];
   $images = $imagesByProduct[$pid] ?? [];
+
+  // аккуратное приведение цен
+  $price      = is_numeric($r['price'])      ? (float)$r['price']      : null;
+  $price_old  = isset($r['price_old']) && $r['price_old'] !== '' && is_numeric($r['price_old'])
+                ? (float)$r['price_old'] : null;
 
   return [
     'id'             => $pid,
@@ -135,7 +142,8 @@ $items = array_map(function($r) use ($baseUrl, $imagesByProduct) {
     'tagline'        => (string)$r['tagline'],
     'link_url'       => (string)($r['link_url'] ?? ''),
     'features'       => $features,
-    'price'          => is_numeric($r['price']) ? (float)$r['price'] : $r['price'],
+    'price_old'      => $price_old,  // <--- добавили
+    'price'          => $price,
     'image'          => (string)$r['image'],     // относительный
     'image_url'      => $image_url,              // абсолютный
     'images'         => $images,                 // галерея
